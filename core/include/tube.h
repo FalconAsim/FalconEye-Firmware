@@ -62,4 +62,16 @@ float tube_heat_fraction(const tube_state_t *st);
 
 const char *tube_result_text(tube_result_t r);
 
+/* Kurulu insert adı ve sınırları (TGP LIMITS cevabı için) */
+typedef struct {
+    float kv_min, kv_max;     /* jeneratör sınırı dahil */
+    float ma_max;
+    uint32_t time_max_ms;
+    float power_max_w;        /* fokus / mod sınırı ile jeneratör gücünün küçüğü */
+} tube_limits_t;
+
+const char *tube_insert_name(void);
+bool tube_has_small_focus(void);
+void tube_limits(const tube_state_t *st, focus_t focus, exp_mode_t mode, tube_limits_t *out);
+
 #endif
