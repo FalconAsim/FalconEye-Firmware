@@ -172,3 +172,32 @@ const char *tube_result_text(tube_result_t r)
     }
     return "?";
 }
+
+/* ---------- insert bilgisi ve sınırlar ---------- */
+
+#define TUBE_POWER_LARGE_W   4100.0f   /* nominal radyografik anot gücü */
+#define TUBE_POWER_SMALL_W    720.0f
+
+const char *tube_insert_name(void) { return "DF-161SBR"; }
+
+bool tube_has_small_focus(void) { return true; }
+
+static float minf(float a, float b) { return a < b ? a : b; }
+
+void tube_limits(const tube_state_t *st, focus_t focus, exp_mode_t mode, tube_limits_t *out)
+{
+    const float gen = st->gen_power_max_w > 0.0f ? st->gen_power_max_w : FE_GEN_POWER_MAX_W;
+    if (mode == MODE_FLUORO) {
+        out->kv_min = FE_FLUORO_KV_MIN;
+        out->kv_max = FE_FLUORO_KV_MAX;
+        out->ma_max = TUBE_MA_MAX_SMALL;
+        out->time_max_ms = FE_FLUORO_TIME_MAX_MS;
+        out->power_max_w = minf(TUBE_FLUORO_POWER_W, gen);
+        return;
+    }
+    out->kv_min = TUBE_KV_MIN;
+    out->kv_max = minf(TUBE_KV_MAX, FE_GEN_KV_MAX);
+    out->ma_max = focus == FOCUS_SMALL ? TUBE_MA_MAX_SMALL : TUBE_MA_MAX_LARGE;
+    out->time_max_ms = TUBE_RAD_TIME_MAX_MS;
+    out->power_max_w = minf(focus == FOCUS_SMALL ? TUBE_POWER_SMALL_W : TUBE_POWER_LARGE_W, gen);
+}

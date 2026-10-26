@@ -86,11 +86,15 @@ Jeneratör alarmı, kV/mA tolerans, yedek zamanlayıcı, acil stop --> HATA (ona
 - Senkron: hazırlık isteği → dedektör hazır → ışınlama isteği → izin → ışınlama. İzin 1 s içinde gelmezse E501; pencere süre dolmadan kapanırsa E502; dedektör hata sinyali E503.
 - Her hattın işlevi ve polaritesi profilde tanımlı; PZ 4343Z profili senkron dokümanı gelince eklenecek.
 
-## Jeneratör protokolü (TGP v1)
+## Jeneratör protokolü (TGP v1, arayüz tanımı rev. 0.4)
 
-- Ayrıntı: `docs/generator_protocol_EN.md`. Komutlar: PING/HB, VER, SET, GET SET/STATUS/LAST, DETREADY.
-- Protokolde ışınlama başlatan komut yoktur; hata onayı yalnızca panelden yapılır.
-- 3 s heartbeat gelmezse bağlantı kopmuş sayılır ve DR'nin "dedektör hazır" bilgisi silinir.
+- Ayrıntı: `docs/generator_protocol_EN.md`. Satır biçimi `SEQ KOMUT ANAHTAR=DEĞER*CRC16` (CRC-16/CCITT-FALSE).
+- Komutlar: `PING`, `HELLO`, `VERSION?`, `SET`, `MODE`, `STATUS?`, `LIMITS?`, `LAST?`, `DETREADY`. Cevaplar `ACK` / `NAK <seq> <kod>` / `PONG`; olaylar `ACTUAL`, `STATE`, `ERROR`, `LIMITS`.
+- Protokolde ışınlama başlatan veya hata onaylayan komut yoktur (E905).
+- PC / Manuel kontrol modu: Manuel modda ya da PC bağlantısı TGP değilken değer yazılamaz (E907).
+- Aynı SEQ ikinci kez gelirse komut yeniden uygulanmaz, önceki cevap tekrarlanır.
+- Canlılık: boşta 3 s, ışınlamada 750 ms; link / TCP kopması anında. Bağlantı kopunca DR'nin "dedektör hazır" bilgisi silinir.
+- Henüz yapılmadı (sonraki adım, `exposure_sm.c`): hazırlıkta değer değişikliğinin kabulü, PC modunda bağlantı kopunca ışınlamanın kesilmesi.
 
 ## Yedek zamanlayıcı (STM32G031)
 
