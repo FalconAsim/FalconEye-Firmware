@@ -57,6 +57,7 @@ typedef struct {
  * varsayılan insert kullanılır ve false döner. */
 bool svc_apply_boot(exposure_sm_t *sm, const nv_settings_t *st);
 
+/* pin: şimdilik FE_SERVICE_PIN_DEFAULT */
 void svc_init(svc_t *svc, exposure_sm_t *sm, nvstore_t *nv, nv_data_t *data, uint32_t pin);
 svc_result_t svc_enter(svc_t *svc, uint32_t pin);
 void svc_exit(svc_t *svc);

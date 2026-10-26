@@ -21,7 +21,7 @@ static sim_t s;
 static nvstore_t nv;
 static nv_data_t data;
 static svc_t svc;
-#define PIN 4711u
+#define PIN FE_SERVICE_PIN_DEFAULT
 
 static void boot(void)
 {
@@ -55,6 +55,7 @@ TEST(pin_ve_kilit)
 {
     fresh();
     CHECK(svc_set_fluoro(&svc, true) == SVC_ERR_NOT_ACTIVE, "servis moduna girmeden ayar yok");
+    CHECK(FE_SERVICE_PIN_DEFAULT == 170464u, "standart servis PIN'i");
     CHECK(svc_enter(&svc, 1) == SVC_ERR_BAD_PIN, "yanlis PIN 1");
     CHECK(svc_enter(&svc, 2) == SVC_ERR_BAD_PIN, "yanlis PIN 2");
     CHECK(svc_enter(&svc, 3) == SVC_ERR_BAD_PIN, "yanlis PIN 3");

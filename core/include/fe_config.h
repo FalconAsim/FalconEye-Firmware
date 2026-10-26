@@ -15,6 +15,11 @@
 #define FE_REF_FULL_SCALE_V       6.0f   /* V */
 
 /* --- Jeneratör --- */
+/* Servis menüsü PIN'i: şimdilik tüm cihazlarda standart (Asım, 26.10.2026).
+ * İleride cihaza özel PIN'e geçilecek (seri numarasından türetme önerisi).
+ * Depo gizli tutulmalı; PIN kılavuza yazılmaz, yalnız servis belgesine. */
+#define FE_SERVICE_PIN_DEFAULT  170464u
+
 #define FE_GEN_POWER_MAX_W     3200.0f   /* Mevcut jeneratör; 5 kW modelde değişir */
 #define FE_GEN_KV_MAX           110.0f
 

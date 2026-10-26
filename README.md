@@ -167,8 +167,9 @@ Kurulu insert servis menüsünden seçilir (`tube_select`); `LIMITS?` ve `VERSIO
 ## Servis menüsü ve opsiyonlar (Asım, 26.10.2026; arayüz tanımı rev. 0.5 §10)
 
 - **Floroskopi** (bir sonraki dedektörle; opsiyon): sistemde hazır, servis menüsünden açılır/kapanır (`svc_set_fluoro`). Açıkken panelde **tek tuşla** RAD ↔ FLUORO (`sm_toggle_mode`); her mod kendi son değerlerini hatırlar, floroskopiye ilk geçiş küçük fokus, 50 kV, 2 mA, 20 s. Tek fokuslu insertte (D-067SB, D-023, OX/105-4) opsiyon açık olsa da floroskopi kullanılamaz. Kapatılırken floroskopideyse radyografiye döner.
-- **DAP metre**: servis menüsünden açılır/kapanır (`svc_set_dap_meter`). Açıkken HAL metre okumasını `sm_record_dap` ile kayda yazar, kart `DONE`'dan sonra `DOSE` satırı gönderir; okuma gelmezse **W603**. **Veteriner versiyonunda kapalı**: kart DAP göndermez, DAP'ı FalconXray hesaplar. Metre arayüzü (muhtemelen J14 RS-485) seçilecek.
+- **DAP metre**: servis menüsünden açılır/kapanır (`svc_set_dap_meter`). Açıkken HAL metre okumasını `sm_record_dap` ile kayda yazar, kart `DONE`'dan sonra `DOSE` satırı gönderir; okuma gelmezse **W603**. **Veteriner versiyonunda kapalı**: kart DAP göndermez, DAP'ı FalconXray hesaplar. Metre RS-232 ile bağlanır.
 - **Insert seçimi**: servis menüsünden (`svc_set_insert`); açılış değerleri yeni insertin sınırlarına göre yüklenir. **Isı modeli sıfırlanmaz**: insert değiştirmek sıcak tüpün ısı kaydını silmenin yolu olmasın.
 - Servis moduna yalnız panelden PIN ile girilir (TGP'den girilemez); 3 yanlış PIN → 60 s kilit; 10 dk işlemsiz kalırsa kapanır. Ayar yalnız hazırlık / ışınlama dışında değişir; FRAM'e yazılıp geri okunur, yazılamazsa geri alınır.
 - FRAM kayıt sürümü 2 (insert, DAP metre). Sürüm 1 (v0.8) kaydı kalibrasyon korunarak okunur ve dönüştürülür.
-- Açık: servis PIN'inin kaynağı (cihaza özel, seri numarasından türetme önerilir).
+- Servis PIN'i şimdilik tüm cihazlarda standart: `FE_SERVICE_PIN_DEFAULT` (`fe_config.h`). İleride cihaza özel PIN. Depo gizli kalmalı.
+- DAP metre takılırsa **RS-232** ile bağlanır (Asım, 26.10.2026): MAX3232'nin ikinci kanalı (birinci kanal J20, PZ Current).
