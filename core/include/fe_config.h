@@ -31,6 +31,12 @@
 #define FE_CHANNEL_MISMATCH_MS       20u   /* NO/NC veya A/B tutarsızlığı -> hata */
 #define FE_ESTOP_MISMATCH_MS        100u   /* iki acil stop kontağı aynı anda açılmalı */
 #define FE_LINE_MISMATCH_MS           5u   /* J2 hat geri okuma uyuşmazlığı -> hata */
+#define FE_FOCUS_SETTLE_MS           50u   /* fokus rölesi oturma süresi (filaman sürülmeden önce) */
+#define FE_FOCUS_MISMATCH_MS        100u   /* röle geri bildirimi komutla uyuşmuyor -> E406 */
+#define FE_REF_MISMATCH_MS           20u   /* DAC geri okuması uyuşmuyor -> E407 */
+#define FE_REF_TOL_KV               1.0f   /* kV referansı geri okuma toleransı (en az) */
+#define FE_REF_TOL_MA               0.5f   /* mA referansı geri okuma toleransı (en az) */
+#define FE_REF_TOL_FRAC            0.03f   /* veya ayarın %3'ü (büyük olanı) */
 #define FE_BUTTON_STUCK_MS        10000u   /* çekimden sonra 10 s basılı kalan buton -> takılı */
 #define FE_BUTTON_HELD_MAX_MS     60000u   /* diğer kilitlerde 60 s */
 

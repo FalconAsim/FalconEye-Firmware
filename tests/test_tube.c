@@ -1,5 +1,6 @@
 /* Tüp koruması testleri - Canon DF-161SBR sınırlarına göre */
 #include "check.h"
+#include <string.h>
 #include "tube.h"
 
 static exposure_params_t rad(float kv, float ma, uint32_t ms, focus_t f)
@@ -114,6 +115,81 @@ TEST(anot_isi_modeli)
     CHECK(tube_check(&st, &p) == TUBE_OK, "5 dk sogumadan sonra izin verilmeli");
 }
 
+static tube_result_t chk(tube_insert_t id, float kv, float ma, uint32_t ms, focus_t f, exp_mode_t m)
+{
+    tube_state_t st; tube_init(&st); tube_select(&st, id);
+    exposure_params_t p = { kv, ma, ms, f, m };
+    return tube_check(&st, &p);
+}
+
+TEST(insert_secimi)
+{
+    tube_state_t st; tube_init(&st);
+    CHECK(st.insert == TUBE_INSERT_DF161SBR, "varsayilan DF-161SBR");
+    CHECK(tube_has_small_focus(&st) && tube_has_fluoro(&st), "DF-161SBR cift fokus, floroskopi");
+    CHECK(tube_select(&st, TUBE_INSERT_D067SB), "D-067SB secildi");
+    CHECK(!tube_has_small_focus(&st) && !tube_has_fluoro(&st), "D-067SB tek fokus");
+    CHECK(!tube_select(&st, TUBE_INSERT_COUNT), "gecersiz insert reddedilir");
+    const char *names[TUBE_INSERT_COUNT] = { "DF-161SBR", "D-067SB", "D-023", "OX/105-4" };
+    for (int i = 0; i < TUBE_INSERT_COUNT; i++) {
+        tube_select(&st, (tube_insert_t)i);
+        CHECK(strcmp(tube_insert_name(&st), names[i]) == 0, "insert adi");
+    }
+}
+
+TEST(tek_fokuslu_insertler)
+{
+    CHECK(chk(TUBE_INSERT_D067SB, 70, 5, 100, FOCUS_SMALL, MODE_RADIOGRAPHY) == TUBE_ERR_NO_SMALL_FOCUS, "D-067SB kucuk fokus yok");
+    CHECK(chk(TUBE_INSERT_D023, 70, 2, 100, FOCUS_SMALL, MODE_RADIOGRAPHY) == TUBE_ERR_NO_SMALL_FOCUS, "D-023 kucuk fokus yok");
+    CHECK(chk(TUBE_INSERT_OX105_4, 70, 5, 100, FOCUS_SMALL, MODE_RADIOGRAPHY) == TUBE_ERR_NO_SMALL_FOCUS, "OX/105-4 kucuk fokus yok");
+    CHECK(chk(TUBE_INSERT_D067SB, 60, 5, 5000, FOCUS_LARGE, MODE_FLUORO) == TUBE_ERR_FLUORO_FOCUS, "D-067SB floroskopi yok");
+}
+
+TEST(d067sb_sinirlari)
+{
+    CHECK(chk(TUBE_INSERT_D067SB, 45, 10, 100, FOCUS_LARGE, MODE_RADIOGRAPHY) == TUBE_ERR_KV_LOW, "45 kV < 50 kV");
+    CHECK(chk(TUBE_INSERT_D067SB, 105, 5, 100, FOCUS_LARGE, MODE_RADIOGRAPHY) == TUBE_ERR_KV_HIGH, "105 kV > 100 kV");
+    CHECK(chk(TUBE_INSERT_D067SB, 60, 23, 100, FOCUS_LARGE, MODE_RADIOGRAPHY) == TUBE_ERR_MA_FOCUS_MAX, "23 mA > 22 mA");
+    CHECK(chk(TUBE_INSERT_D067SB, 70, 15, 1000, FOCUS_LARGE, MODE_RADIOGRAPHY) == TUBE_OK, "70 kV 15 mA 1 s uygun");
+    CHECK(chk(TUBE_INSERT_D067SB, 100, 12, 1000, FOCUS_LARGE, MODE_RADIOGRAPHY) == TUBE_ERR_RATING, "100 kV 12 mA 1 s yuk egrisi (12.6 x 0.9)");
+    CHECK(chk(TUBE_INSERT_D067SB, 70, 10, 12000, FOCUS_LARGE, MODE_RADIOGRAPHY) == TUBE_ERR_TIME_MAX, "10 s ustu (veri sayfasi 20 s, profil 10 s)");
+    tube_state_t st; tube_init(&st); tube_select(&st, TUBE_INSERT_D067SB);
+    tube_exposure_done(&st, FOCUS_LARGE, 1000);
+    CHECK(st.cooldown_ms == 60000u, "gorev cevrimi 1:60");
+}
+
+TEST(d023_sinirlari)
+{
+    CHECK(chk(TUBE_INSERT_D023, 70, 4.4f, 100, FOCUS_LARGE, MODE_RADIOGRAPHY) == TUBE_ERR_MA_FOCUS_MAX, "4.4 mA > 4.3 mA");
+    CHECK(chk(TUBE_INSERT_D023, 70, 3.5f, 1000, FOCUS_LARGE, MODE_RADIOGRAPHY) == TUBE_OK, "70 kV 3.5 mA uygun");
+    CHECK(chk(TUBE_INSERT_D023, 50, 3.0f, 1000, FOCUS_LARGE, MODE_RADIOGRAPHY) == TUBE_ERR_RATING, "50 kV 3.0 mA yuk egrisi (3.0 x 0.9)");
+}
+
+TEST(ox105_4_sinirlari)
+{
+    CHECK(chk(TUBE_INSERT_OX105_4, 115, 10, 100, FOCUS_LARGE, MODE_RADIOGRAPHY) == TUBE_ERR_KV_HIGH, "115 kV");
+    CHECK(chk(TUBE_INSERT_OX105_4, 60, 50, 100, FOCUS_LARGE, MODE_RADIOGRAPHY) == TUBE_OK, "60 kV 50 mA 0.1 s (3 kW)");
+    tube_state_t st; tube_init(&st); tube_select(&st, TUBE_INSERT_OX105_4);
+    st.gen_power_max_w = 5000.0f;   /* 5 kW jeneratör: yük eğrisi belirleyici */
+    exposure_params_t p = { 100, 36, 10000, FOCUS_LARGE, MODE_RADIOGRAPHY };
+    CHECK(tube_check(&st, &p) == TUBE_ERR_RATING, "100 kV 36 mA 10 s (39 x 0.9 = 35.1)");
+    p.ma = 35.0f;
+    CHECK(tube_check(&st, &p) == TUBE_ERR_HEAT, "100 kV 35 mA 10 s = 35 kJ > 30 kJ anot kapasitesi");
+    p.time_ms = 5000u;
+    CHECK(tube_check(&st, &p) == TUBE_OK, "100 kV 35 mA 5 s uygun");
+    for (int i = 0; i < 600000; i++) tube_tick(&st, 250.0f, 1);
+    CHECK(tube_heat_fraction(&st) > 0.95f, "250 W dengesi 30 kJ kapasiteye yakin");
+}
+
+TEST(sinir_bildirimi_profilden)
+{
+    tube_state_t st; tube_init(&st); tube_select(&st, TUBE_INSERT_D067SB);
+    tube_limits_t l;
+    tube_limits(&st, FOCUS_LARGE, MODE_RADIOGRAPHY, &l);
+    CHECK(l.kv_min == 50.0f && l.kv_max == 100.0f && l.ma_max == 22.0f && l.power_max_w == 1270.0f,
+          "D-067SB LIMITS degerleri");
+}
+
 int main(void)
 {
     printf("Tup korumasi testleri (Canon DF-161SBR)\n");
@@ -126,5 +202,11 @@ int main(void)
     RUN(floroskopi_sinirlari);
     RUN(gorev_dongusu);
     RUN(anot_isi_modeli);
+    RUN(insert_secimi);
+    RUN(tek_fokuslu_insertler);
+    RUN(d067sb_sinirlari);
+    RUN(d023_sinirlari);
+    RUN(ox105_4_sinirlari);
+    RUN(sinir_bildirimi_profilden);
     return REPORT();
 }

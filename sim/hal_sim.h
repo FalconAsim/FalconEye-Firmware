@@ -17,6 +17,14 @@ typedef struct {
     bool detector_enable, detector_error;
     bool pc_link_ok;        /* PC modu: yazılım bağlantısı canlı (varsayılan true) */
 
+    /* Fokus rölesi ve referans geri okuması */
+    bool focus_fb;               /* röle geri bildirimi (çekili = küçük) */
+    uint32_t focus_delay_ms;     /* röle oturma süresi */
+    uint32_t focus_move_ms;
+    bool focus_stuck;            /* hata enjeksiyonu: röle konum değiştirmiyor */
+    float dac_kv_error, dac_ma_error;   /* hata enjeksiyonu: DAC çıkışında sapma */
+    bool hot_switch;             /* kontrol: röle filaman sürülürken hareket etti */
+
     /* Kablo ve buton arızası enjeksiyonu */
     bool hs1_no_short;      /* 1. kademe NO hattı kısa devre (basılı görünür) */
     bool hs2_no_short;      /* 2. kademe NO hattı kısa devre */

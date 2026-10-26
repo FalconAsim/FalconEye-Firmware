@@ -290,6 +290,19 @@ TEST(sinir_bildirimi)
           "floroskopi satiri");
 }
 
+TEST(tek_fokuslu_insert)
+{
+    setup();
+    tube_select(&sm.tube, TUBE_INSERT_D067SB);
+    sm.cfg.fluoro_enabled = true;
+    const char *a = cmd("LIMITS?");
+    CHECK(valid_lines(a) == 1 && line_has(a, 0, "LIMITS TUBE=D-067SB MODE=RAD FO=L KV=50.0-100.0 MA=1-22 MS=1-10000 P=1270"),
+          "tek fokus: yalniz FO=L satiri, floroskopi yok");
+    CHECK(line_has(cmd("SET KV=70.0 MA=5 MS=100 FO=S"), 0, "NAK 0002 E214"), "kucuk fokus -> E214");
+    CHECK(line_has(cmd("SET KV=45.0 MA=5 MS=100 FO=L"), 0, "NAK 0003 E201"), "45 kV < 50 kV -> E201");
+    CHECK(strstr(cmd("VERSION?"), "TUBE=D-067SB") != NULL, "VERSION'da insert");
+}
+
 TEST(baglanti_kopmasi)
 {
     setup();
@@ -348,6 +361,7 @@ int main(void)
     RUN(cekim_kaydi_ve_durum);
     RUN(hata_kodu_durumda);
     RUN(sinir_bildirimi);
+    RUN(tek_fokuslu_insert);
     RUN(baglanti_kopmasi);
     RUN(isinlamada_kisa_canlilik_esigi);
     RUN(uzun_satir);

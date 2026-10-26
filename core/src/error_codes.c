@@ -27,13 +27,13 @@ static const fe_error_t table[] = {
 
     /* --- E2xx Tüp koruması --- */
     { 201, 'E', SEV_INFO,    "kV tüp alt sınırının altında",
-      "Seçilen kV, tüpün en düşük çalışma geriliminin (40 kV) altında.",
-      "kV değerini 40 kV veya üzerine ayarlayın." },
+      "Seçilen kV, kurulu tüpün en düşük çalışma geriliminin altında (DF-161SBR 40 kV; D-067SB, D-023, OX/105-4 50 kV).",
+      "kV değerini tüpün alt sınırına veya üzerine ayarlayın." },
     { 202, 'E', SEV_INFO,    "kV üst sınırın üzerinde",
       "Seçilen kV, tüpün veya jeneratörün üst sınırını aşıyor.",
       "kV değerini düşürün." },
     { 203, 'E', SEV_INFO,    "mA bu fokus için çok yüksek",
-      "Seçilen mA, fokusun izin verilen en yüksek akımını aşıyor (küçük fokus 15 mA, büyük fokus 60 mA).",
+      "Seçilen mA, kurulu tüpün bu fokus için izin verilen en yüksek akımını aşıyor (ör. DF-161SBR küçük fokus 15 mA, büyük fokus 60 mA; D-067SB 22 mA; D-023 4,3 mA).",
       "mA değerini düşürün veya büyük fokusu seçin." },
     { 204, 'E', SEV_INFO,    "Tüp yük sınırı aşılıyor",
       "Seçilen kV, mA ve süre birlikte tüpün yük eğrisini aşıyor.",
@@ -51,7 +51,7 @@ static const fe_error_t table[] = {
       "Tüpün çekimler arası bekleme süresi dolmadı.",
       "Ekrandaki geri sayım bitene kadar bekleyin." },
     { 209, 'E', SEV_INFO,    "Floroskopi yalnızca küçük fokus",
-      "Floroskopi modunda büyük fokus seçilemez.",
+      "Floroskopi modunda büyük fokus seçilemez; floroskopi yalnız küçük fokuslu ve floroskopisi tanımlı insertte (DF-161SBR) yapılabilir.",
       "Küçük fokusu seçin." },
     { 210, 'E', SEV_INFO,    "Floroskopi kV aralığı dışında",
       "Floroskopi 40–60 kV aralığında yapılabilir.",
@@ -113,7 +113,14 @@ static const fe_error_t table[] = {
       "Jeneratöre giden kontrol hattının durumu panelin komutuyla uyuşmuyor (kısa devre, kopukluk veya anahtar arızası).",
       "Cihazı kullanmayın ve servisi arayın." },
 
-    /* --- E5xx Dedektör ve haberleşme --- */
+    { 406, 'E', SEV_SERVICE, "Fokus rölesi uyuşmazlığı",
+      "Fokus rölesinin geri bildirimi seçilen fokusla uyuşmuyor (röle, sürücü veya kablo arızası).",
+      "Cihazı kullanmayın ve servisi arayın." },
+    { 407, 'E', SEV_SERVICE, "kV / mA referans çıkışı uyuşmazlığı",
+      "Jeneratöre giden kV veya mA referans geriliminin geri okuması ayarla uyuşmuyor (DAC, tampon veya kablo arızası).",
+      "Cihazı kullanmayın ve servisi arayın." },
+
+    /* --- E5xx Dedektör --- */
     { 501, 'E', SEV_INFO,    "Dedektör hazır değil",
       "Dedektör hazır bilgisi zamanında gelmedi.",
       "DR yazılımında dedektörün hazır olduğunu kontrol edin ve yeniden deneyin." },
@@ -140,6 +147,9 @@ static const fe_error_t table[] = {
     { 601, 'W', SEV_WARNING, "Floroskopi 5 dakikaya ulaştı",
       "Toplam floroskopi süresi 5 dakikaya ulaştı (IEC 60601-2-54).",
       "Uyarıyı ekrandan onaylayın; sayaç sıfırlanır." },
+    { 602, 'W', SEV_WARNING, "Kalibrasyon yok",
+      "Kalıcı bellekte geçerli kV / mA kalibrasyonu bulunamadı; cihaz nominal ölçekle çalışıyor.",
+      "Servis kalibrasyonu yaptırın. Kalibrasyon yapılana kadar kV ve mA değerleri tolerans dışında olabilir." },
 };
 
 #define N_ERR (sizeof(table) / sizeof(table[0]))
@@ -167,6 +177,7 @@ static uint16_t tube_code(tube_result_t t)
     case TUBE_ERR_FLUORO_KV:    return 210;
     case TUBE_ERR_FLUORO_POWER: return 211;
     case TUBE_ERR_PARAM:        return 212;
+    case TUBE_ERR_NO_SMALL_FOCUS: return 214;
     case TUBE_OK:               return 0;
     }
     return 212;
@@ -204,6 +215,8 @@ const fe_error_t *fe_error_for(end_reason_t r, tube_result_t t)
     case END_LINK_DOWN:        return by_code(701);
     case END_LINK_LOST:        return by_code(702);
     case END_LINK_LOST_SERIAL: return by_code(703);
+    case END_FOCUS_RELAY:      return by_code(406);
+    case END_REF_READBACK:     return by_code(407);
     }
     return NULL;
 }
@@ -211,6 +224,8 @@ const fe_error_t *fe_error_for(end_reason_t r, tube_result_t t)
 const fe_error_t *fe_warning_fluoro_cumulative(void) { return by_code(601); }
 
 const fe_error_t *fe_error_by_code(uint16_t code) { return by_code(code); }
+
+const fe_error_t *fe_warning_no_calibration(void) { return by_code(602); }
 
 const fe_error_t *fe_error_table(uint32_t *count)
 {

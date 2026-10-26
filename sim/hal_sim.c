@@ -11,6 +11,7 @@ void sim_init(sim_t *s)
     s->backup_ok = true;
     s->detector_ready = true;
     s->pc_link_ok = true;
+    s->focus_delay_ms = 10u;
     s->filament_ready_after_ms = 3500u;   /* gerçek flaman 4 s'den kısa sürede hazır */
     s->rise_tau_ms = 1.0f;   /* yüksek frekanslı jeneratör: ~1 ms yükselme */
 }
@@ -30,6 +31,14 @@ static void gen_model(sim_t *s, const sm_outputs_t *o)
     const float a = 1.0f / s->rise_tau_ms;
     s->kv += (kv_target - s->kv) * a;
     s->ma += (ma_target - s->ma) * a;
+
+    /* Fokus rölesi */
+    if (!s->focus_stuck && o->focus_small != s->focus_fb) {
+        if (++s->focus_move_ms >= s->focus_delay_ms) { s->focus_fb = o->focus_small; s->focus_move_ms = 0u; }
+    } else {
+        s->focus_move_ms = 0u;
+    }
+    if (o->preheat && o->focus_small != s->focus_fb) s->hot_switch = true;   /* röle yük altında hareket etti */
 
     if (o->xray_on) s->xray_on_ms++;
     if (o->xray_on && !o->rl5_series) s->xray_without_rl5 = true;
@@ -58,6 +67,9 @@ void sim_run(sim_t *s, exposure_sm_t *sm, uint32_t ms)
             .detector_enable = s->detector_enable,
             .detector_error = s->detector_error,
             .pc_link_ok = s->pc_link_ok,
+            .focus_fb_small = s->focus_fb,
+            .kv_ref_fb = s->last_out.kv_ref + s->dac_kv_error,
+            .ma_ref_fb = s->last_out.ma_ref + s->dac_ma_error,
             .xray_line_fb = ((s->last_out.xray_on && s->last_out.rl5_series) || s->xray_line_short)
                             && !s->xray_line_open,
             .preheat_line_fb = s->last_out.preheat,

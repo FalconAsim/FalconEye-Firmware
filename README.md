@@ -120,6 +120,7 @@ Jeneratör alarmı, kV/mA tolerans, yedek zamanlayıcı, acil stop --> HATA (ona
 1. 1 ms zamanlayıcı kesmesinde: girişleri oku (debounce) → `det_map_inputs` → `sm_step` → `det_map_outputs` → çıkışları ve DAC'ı yaz (`calib_kv_ref_volts` → `calib_volts_to_dac`).
    - `sm_inputs_t.pc_link_ok`: PC bağlantısı TGP ise `tgp_ctx_t.link_up`, Current ise RS-232 canlılığı. Her 1 ms'de `tgp_tick`; Ethernet PHY link düşünce veya TCP kapanınca `tgp_link_lost`.
    - Panel menüsünde mod değişince hem `sm_set_pc_link` hem `tgp_ctx_t.ctrl` / `link_sel` güncellenir (yalnız BEKLE'de).
+   - `sm_inputs_t.focus_fb_small`: fokus rölesi geri bildirimi. `kv_ref_fb` / `ma_ref_fb`: DAC çıkışlarının ADC geri okuması, kalibrasyonun tersiyle kV / mA'ya çevrilmiş. `sm_outputs_t.focus_small` her adımda röle sürücüsüne yazılır.
 2. HAZIR durumunda yedek zamanlayıcıya ARM gönder; `backup_ok` girişi yedek zamanlayıcının ENABLE geri okumasıdır.
 3. Durum değişince ve her çekimden sonra `tgp_fmt_event_*` ile olay satırı gönder.
 4. Açılışta `nv_load`; NV_LOAD_DEFAULTS ise ekranda "Kalibrasyon yok" uyarısı göster.
@@ -130,52 +131,33 @@ Jeneratör alarmı, kV/mA tolerans, yedek zamanlayıcı, acil stop --> HATA (ona
 - Ekranda kod, kısa mesaj ve "Yapılacak" metni birlikte görünür; aynı kod ekspozisyon kaydına ve DR yazılımına gider.
 - Kullanım kılavuzu tablosu firmware'den üretilir: `./build/gen_error_table > hata_kodlari.md`. Kod değişince kılavuz da aynı komutla güncellenir.
 
-## Tüp koruması (DF-161SBR)
+## Tüp koruması – insert profilleri
 
-- 40–125 kV (jeneratör 110 kV), büyük fokus en fazla 60 mA, küçük fokus en fazla 15 mA.
-- Yük eğrisi tablosu kV ve süreye göre ara değer bulur, %10 güvenlik payı uygular.
-- Radyografi en fazla 10 s; floroskopi yalnızca küçük fokus, 40–60 kV, en fazla 600 W ve 20 s.
-- Anot ısı modeli: 35.5 kJ kapasite, 600 W ısı atma; doluysa ışınlamaya izin vermez.
-- Görev döngüsü: büyük fokus 1:40, küçük fokus 1:20 bekleme.
-- Jeneratör gücü sınırı: 3.2 kW (`fe_config.h`).
+Kurulu insert servis menüsünden seçilir (`tube_select`); `LIMITS?` ve `VERSION?` cevapları buna göre değişir.
 
-## Bilgisayarda derleme ve test
+| Insert | Fokus | kV | En yüksek mA | Anot | Görev çevrimi | Floroskopi |
+|---|---|---|---|---|---|---|
+| Canon DF-161SBR (varsayılan) | 1,6 / 0,5 | 40–125 (jeneratör 110) | 60 / 15 | 35,5 kJ, 600 W | 1:40 / 1:20 | Küçük fokus, 40–60 kV, 600 W, 20 s |
+| Canon D-067SB | 0,6 | 50–100 | 22 | 35 kJ, 250 W | 1:60 | Yok |
+| Canon D-023 | 0,2 | 50–100 | 4,3 | 35 kJ, 250 W | 1:60 | Yok |
+| CEI OX/105-4 | 2,6 | 50–110 | 50 (jeneratör) | 30 kJ, 250 W | 1:40 (varsayım) | Yok |
 
-Gerekenler: CMake ve bir C derleyicisi.
+- Yük eğrileri veri sayfası grafiklerinden gözle okundu (DC / sabit potansiyel eğrileri), %10 güvenlik payı uygulanır; seri üretimden önce sayısallaştırılacak.
+- Grafiği 1 s'den başlayan insertlerde 0,1 s değeri 1 s değerine eşit alındı; D-067SB ve D-023'te radyografi 10 s ile sınırlı (veri sayfası 20 / 40 s).
+- Tek fokuslu insertte küçük fokus reddedilir (E214). kV alt sınırı insertten gelir (E201).
+- Anot ısı modeli: birinci dereceden, zaman sabiti = ısı kapasitesi / ısı atma hızı.
 
-- **Windows:** [STM32CubeCLT](https://www.st.com/en/development-tools/stm32cubeclt.html) (CMake, Ninja ve ARM derleyicisini birlikte kurar) + bilgisayar testleri için MinGW-w64 veya Visual Studio Build Tools. Kod düzenleyici olarak VS Code ve "STM32Cube for VS Code" eklentisi.
-- **Linux:** `sudo apt install build-essential cmake gcc-arm-none-eabi`
+## Fokus rölesi (yeni kartta)
 
-```
-cmake -S . -B build
-cmake --build build
-ctest --test-dir build --output-on-failure
-```
+- Röle **bırakık = büyük fokus**, çekili = küçük fokus (hataya güvenli: arıza büyük fokusa düşer). Açılışta büyük fokus.
+- Komut yalnız filaman sürülmüyorken değişir; değişimden sonra 50 ms oturma beklenir, bu sürede PreHeat verilmez (yük altında anahtarlama yok).
+- Geri bildirim (`focus_relay_readback`): röle kontağı veya zorlamalı kılavuzlu röle. Oturduktan sonra 100 ms uyuşmazlık → **E406** (servis); ışınlamadaysa ışınlama kesilir.
 
-STM32 için çekirdeği derlemek:
+## kV / mA referans geri okuması
 
-```
-cmake -S . -B build-arm -DCMAKE_TOOLCHAIN_FILE=cmake/arm-none-eabi.cmake
-cmake --build build-arm
-```
+- `ref_readback`: DAC çıkışı ikinci bir ADC kanalıyla okunur, bir önceki adımın komutuyla karşılaştırılır (tolerans en az 1 kV / 0,5 mA veya %3). 20 ms uyuşmazlık → **E407** (servis); ışınlamadaysa kesilir.
+- Beklemede referans 0 olmalıdır: yüksekte takılı DAC çekimden önce yakalanır.
 
-## Doğrulanması gereken varsayımlar
+## Kalibrasyon yok uyarısı
 
-1. **Yük eğrisi değerleri** datasheet grafiğinden gözle okundu. Seri üretimden önce eğriler sayısallaştırılmalı.
-2. **Anot ısı modeli** birinci dereceden; datasheet'teki ısınma/soğuma eğrisi ve ölçümle ince ayar yapılacak.
-3. **Floroskopi pedalı:** pedal basılınca hazırlık başlar, hazır olunca pedal basılı tutuldukça otomatik ışınlar. Bu akışın klinik kullanıma uygunluğu onaylanmalı.
-4. **Toleranslar:** kV ±%10, mA ±%20, 20 ms yükselme süresinden sonra, 50 ms süreyle aşılırsa hata. Kalibrasyon ölçümlerinden sonra sıkılaştırılabilir.
-
-## Sıradaki adımlar
-
-- Kalibrasyon tabloları ve FRAM'de CRC'li saklama
-- Dedektör profilleri (AED / senkron / kapalı)
-- Teknogem jeneratör protokolü (Ethernet ve RS-232)
-- Yedek zamanlayıcı firmware'i (STM32G031)
-- Şematikten sonra: pin atamaları, DAC/ADC, BT817 ekran, W5500, Türkçe arayüz
-
-## Mevzuat
-
-Bu yazılım IEC 62304 kapsamındadır. Güvenliğin tek bariyeri değildir:
-donanım güvenlik zinciri (yedek zamanlayıcı, watchdog, interlock, aşım
-komparatörü) yazılımdan bağımsız olarak ışınlamayı keser.
+- `nv_load` varsayılan döndüyse ekranda **W602** (`fe_warning_no_calibration`).
