@@ -2,6 +2,7 @@
 #include "check.h"
 #include "hal_sim.h"
 #include "error_codes.h"
+#include "fe_config.h"
 #include <math.h>
 
 static exposure_sm_t sm;
@@ -439,6 +440,106 @@ TEST(pc_modu_rs232_kopma)
           "RS-232 kopmasi E703");
 }
 
+TEST(fokus_rolesi_yuk_altinda_anahtarlanmaz)
+{
+    setup(false);
+    sm.cfg.focus_relay_readback = true;
+    CHECK(sm.params.focus == FOCUS_SMALL && sm.params.mode == MODE_RADIOGRAPHY,
+          "acilis: kucuk fokus, radyografi (floroskopi degil)");
+    CHECK(s.last_out.focus_small && s.focus_fb, "acilista kucuk fokus rolesi cekili");
+    set_rad(70, 20, 100, FOCUS_LARGE);     /* büyük fokusa geç */
+    sim_run(&s, &sm, 100);
+    CHECK(!s.last_out.focus_small && !s.focus_fb, "beklemede buyuk fokus");
+    set_rad(60, 10, 100, FOCUS_SMALL);
+    s.hs1 = true;                     /* fokus degisir degismez 1. kademe */
+    sim_run(&s, &sm, 20);
+    CHECK(sm.state == ST_IDLE && !s.last_out.preheat, "role oturmadan PreHeat yok");
+    sim_run(&s, &sm, 4200);
+    CHECK(sm.state == ST_READY && s.last_out.focus_small && s.focus_fb, "kucuk fokusta HAZIR");
+    s.hs2 = true; sim_run(&s, &sm, 300);
+    CHECK(sm.last_record.reason == END_TIME_DONE, "cekim tamam");
+    CHECK(!s.hot_switch, "role filaman surulurken hic hareket etmedi");
+    release_all(); sim_run(&s, &sm, 10);
+    set_rad(70, 20, 100, FOCUS_LARGE);
+    sim_run(&s, &sm, 100);
+    CHECK(!s.last_out.focus_small && !s.focus_fb, "beklemede buyuk fokusa dondu");
+}
+
+TEST(fokus_rolesi_takili)
+{
+    setup(false);
+    sm.cfg.focus_relay_readback = true;
+    set_rad(70, 20, 100, FOCUS_LARGE);
+    sim_run(&s, &sm, 100);            /* röle büyük fokusta */
+    s.focus_stuck = true;             /* röle büyük fokusta takılı */
+    set_rad(60, 10, 100, FOCUS_SMALL);
+    s.hs1 = true;
+    sim_run(&s, &sm, 300);
+    CHECK(sm.state == ST_FAULT && sm.last_reason == END_FOCUS_RELAY, "E406, hazirlik baslamadi");
+    CHECK(s.xray_on_ms == 0 && !s.last_out.preheat, "isinlama yok");
+    CHECK(fe_error_for(END_FOCUS_RELAY, TUBE_OK)->code == 406 &&
+          fe_error_for(END_FOCUS_RELAY, TUBE_OK)->severity == SEV_SERVICE, "E406 servis");
+}
+
+TEST(fokus_rolesi_isinlamada_birakti)
+{
+    setup(false);
+    sm.cfg.focus_relay_readback = true;
+    set_rad(60, 10, 2000, FOCUS_SMALL);
+    prep_to_ready(); sim_run(&s, &sm, 100);
+    s.hs2 = true; sim_run(&s, &sm, 200);
+    CHECK(sm.state == ST_EXPOSING, "isinlama");
+    s.focus_fb = false; s.focus_stuck = true;   /* röle düştü (büyük fokusa geçti) */
+    sim_run(&s, &sm, FE_FOCUS_MISMATCH_MS + 2);
+    CHECK(sm.state == ST_FAULT && sm.last_reason == END_FOCUS_RELAY, "isinlama kesildi E406");
+}
+
+TEST(referans_cikisi_geri_okuma)
+{
+    setup(false);
+    sm.cfg.ref_readback = true;
+    set_rad(70, 20, 100, FOCUS_LARGE);
+    prep_to_ready();
+    s.hs2 = true; sim_run(&s, &sm, 300);
+    CHECK(sm.last_record.reason == END_TIME_DONE, "saglam DAC: normal cekim");
+    release_all(); sim_run(&s, &sm, 10);
+    s.dac_kv_error = 30.0f;            /* beklemede DAC 30 kV'ta takılı */
+    sim_run(&s, &sm, 30);
+    CHECK(sm.state == ST_FAULT && sm.last_reason == END_REF_READBACK, "beklemede yuksek referans: E407");
+    CHECK(fe_error_for(END_REF_READBACK, TUBE_OK)->code == 407, "kod E407");
+}
+
+TEST(referans_isinlamada_sapti)
+{
+    setup(false);
+    sm.cfg.ref_readback = true;
+    set_rad(70, 20, 2000, FOCUS_LARGE);
+    prep_to_ready();
+    s.hs2 = true; sim_run(&s, &sm, 300);
+    s.dac_ma_error = 5.0f;             /* mA referansı 5 mA yüksek */
+    sim_run(&s, &sm, FE_REF_MISMATCH_MS + 2);
+    CHECK(sm.state == ST_FAULT && sm.last_reason == END_REF_READBACK, "isinlama kesildi E407");
+    CHECK(!s.last_out.xray_on, "X-RAY ON kapali");
+}
+
+TEST(tek_fokuslu_insertte_acilis)
+{
+    setup(false);
+    tube_select(&sm.tube, TUBE_INSERT_D067SB);
+    sm_load_boot_defaults(&sm);
+    CHECK(sm.params.focus == FOCUS_LARGE && sm.params.mode == MODE_RADIOGRAPHY, "tek fokus: buyuk (tek) fokus");
+    CHECK(tube_check(&sm.tube, &sm.params) == TUBE_OK, "acilis degerleri D-067SB sinirlari icinde");
+    tube_select(&sm.tube, TUBE_INSERT_DF161SBR);
+    sm_load_boot_defaults(&sm);
+    CHECK(tube_check(&sm.tube, &sm.params) == TUBE_OK, "acilis degerleri DF-161SBR kucuk fokusta uygun");
+}
+
+TEST(kalibrasyon_yok_uyarisi)
+{
+    const fe_error_t *w = fe_warning_no_calibration();
+    CHECK(w && w->prefix == 'W' && w->code == 602 && w->severity == SEV_WARNING, "W602");
+}
+
 TEST(manuel_modda_kopma_etkisiz)
 {
     setup(false);
@@ -780,5 +881,12 @@ int main(void)
     RUN(pc_modu_isinlamada_kopma_keser);
     RUN(pc_modu_rs232_kopma);
     RUN(manuel_modda_kopma_etkisiz);
+    RUN(fokus_rolesi_yuk_altinda_anahtarlanmaz);
+    RUN(fokus_rolesi_takili);
+    RUN(fokus_rolesi_isinlamada_birakti);
+    RUN(referans_cikisi_geri_okuma);
+    RUN(referans_isinlamada_sapti);
+    RUN(tek_fokuslu_insertte_acilis);
+    RUN(kalibrasyon_yok_uyarisi);
     return REPORT();
 }

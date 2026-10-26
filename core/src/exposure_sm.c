@@ -33,12 +33,25 @@ void sm_init(exposure_sm_t *sm, const sm_config_t *cfg)
     sm->cfg = *cfg;
     tube_init(&sm->tube);
     if (cfg->gen_power_max_w > 0.0f) sm->tube.gen_power_max_w = cfg->gen_power_max_w;
-    sm->params.kv = 70.0f;
-    sm->params.ma = 20.0f;
-    sm->params.time_ms = 100u;
-    sm->params.focus = FOCUS_LARGE;
-    sm->params.mode = MODE_RADIOGRAPHY;
+    sm_load_boot_defaults(sm);
     enter(sm, ST_IDLE);
+}
+
+/* Açılış değerleri (Asım, 26.10.2026): radyografi modu (floroskopi değil),
+ * insert çift fokusluysa KÜÇÜK fokus. Değerler küçük fokusun yük eğrisi
+ * içinde kalır. Tek fokuslu insertte büyük (tek) fokus. */
+void sm_load_boot_defaults(exposure_sm_t *sm)
+{
+    const bool small = tube_has_small_focus(&sm->tube);
+    sm->params.kv = 60.0f;
+    sm->params.ma = small ? 10.0f : 5.0f;
+    sm->params.time_ms = 100u;
+    sm->params.focus = small ? FOCUS_SMALL : FOCUS_LARGE;
+    sm->params.mode = MODE_RADIOGRAPHY;
+    /* Röle bırakık = büyük fokus; küçük fokus komutu ilk adımda verilir ve
+     * 50 ms oturma süresi beklenir. */
+    sm->focus_cmd_small = false;
+    sm->focus_settle_ms = FE_FOCUS_SETTLE_MS;
 }
 
 sm_set_result_t sm_set_params_ex(exposure_sm_t *sm, const exposure_params_t *p)
@@ -91,7 +104,8 @@ static bool is_fault_reason(end_reason_t r)
            r == END_BACKUP_TIMER || r == END_ESTOP ||
            r == END_BUTTON_STUCK || r == END_INPUT_CHANNEL || r == END_ESTOP_CHANNEL ||
            r == END_LINE_FAULT || r == END_TIME_DEV || r == END_DETECTOR_ERROR ||
-           r == END_DETECTOR_WINDOW || r == END_LINK_LOST || r == END_LINK_LOST_SERIAL;
+           r == END_DETECTOR_WINDOW || r == END_LINK_LOST || r == END_LINK_LOST_SERIAL ||
+           r == END_FOCUS_RELAY || r == END_REF_READBACK;
 }
 
 static bool is_fluoro(const exposure_sm_t *sm)
@@ -256,6 +270,43 @@ void sm_step(exposure_sm_t *sm, const sm_inputs_t *raw, sm_outputs_t *out, uint3
         }
     }
 
+    /* Fokus rölesi: komut yalnız filaman sürülmüyorken (BEKLE / KİLİT / HATA)
+     * değişir; röle yük altında anahtarlanmaz. Bırakık = büyük fokus. */
+    const bool filament_driven = sm->state == ST_PREP || sm->state == ST_READY ||
+                                 sm->state == ST_EXPOSING;
+    if (!filament_driven) {
+        const bool want_small = sm->params.focus == FOCUS_SMALL;
+        if (want_small != sm->focus_cmd_small) {
+            sm->focus_cmd_small = want_small;
+            sm->focus_settle_ms = 0u;
+        }
+    }
+    if (sm->focus_settle_ms < 0xFFFF0000u) sm->focus_settle_ms += dt;
+    const bool focus_settled = sm->focus_settle_ms >= FE_FOCUS_SETTLE_MS;
+    if (sm->cfg.focus_relay_readback) {
+        const bool bad = focus_settled && raw->focus_fb_small != sm->focus_cmd_small;
+        sm->focus_bad_ms = bad ? sm->focus_bad_ms + dt : 0u;
+        if (sm->focus_bad_ms >= FE_FOCUS_MISMATCH_MS && sm->state != ST_FAULT) {
+            if (sm->state == ST_EXPOSING) finish_exposure(sm, END_FOCUS_RELAY);
+            else lock(sm, END_FOCUS_RELAY);
+        }
+    }
+
+    /* kV / mA referans (DAC) geri okuması: bir önceki adımın komutu ile
+     * karşılaştırılır. Beklemede referans 0 olmalı: takılı / yüksek kalan
+     * DAC çıkışı ışınlamadan önce yakalanır. */
+    if (sm->cfg.ref_readback) {
+        const float tkv = fmaxf(FE_REF_TOL_KV, sm->prev_kv_ref * FE_REF_TOL_FRAC);
+        const float tma = fmaxf(FE_REF_TOL_MA, sm->prev_ma_ref * FE_REF_TOL_FRAC);
+        const bool bad = fabsf(raw->kv_ref_fb - sm->prev_kv_ref) > tkv ||
+                         fabsf(raw->ma_ref_fb - sm->prev_ma_ref) > tma;
+        sm->ref_bad_ms = bad ? sm->ref_bad_ms + dt : 0u;
+        if (sm->ref_bad_ms >= FE_REF_MISMATCH_MS && sm->state != ST_FAULT) {
+            if (sm->state == ST_EXPOSING) finish_exposure(sm, END_REF_READBACK);
+            else lock(sm, END_REF_READBACK);
+        }
+    }
+
     /* Kanal tutarsızlığı: kısa devre veya kopuk kablo */
     sm->chan_bad_ms = chan_bad ? sm->chan_bad_ms + dt : 0u;
     if (sm->state != ST_FAULT && sm->chan_bad_ms >= FE_CHANNEL_MISMATCH_MS) {
@@ -302,6 +353,10 @@ void sm_step(exposure_sm_t *sm, const sm_inputs_t *raw, sm_outputs_t *out, uint3
                 lock(sm, END_LINK_DOWN);   /* PC modu: bağlantı yokken hazırlık başlamaz */
                 break;
             }
+            if (!focus_settled ||
+                (sm->cfg.focus_relay_readback && raw->focus_fb_small != sm->focus_cmd_small)) {
+                break;   /* fokus rölesi oturmadan filaman sürülmez; birkaç ms bekler */
+            }
             sm->last_tube_result = tube_check(&sm->tube, &sm->params);
             if (sm->last_tube_result != TUBE_OK) {
                 lock(sm, END_TUBE_REJECT);
@@ -322,8 +377,7 @@ void sm_step(exposure_sm_t *sm, const sm_inputs_t *raw, sm_outputs_t *out, uint3
         }
         out->det_prep = true;
         out->preheat = true;
-        out->focus_small = (sm->params.focus == FOCUS_SMALL);
-        out->lamp_prep = true;
+                out->lamp_prep = true;
         out->kv_ref = sm->params.kv;
         out->ma_ref = sm->params.ma;
 
@@ -416,8 +470,7 @@ void sm_step(exposure_sm_t *sm, const sm_inputs_t *raw, sm_outputs_t *out, uint3
 
     case ST_EXPOSING: {
         out->preheat = true;
-        out->focus_small = (sm->params.focus == FOCUS_SMALL);
-        out->rl5_series = true;
+                out->rl5_series = true;
         out->kv_ref = sm->params.kv;
         out->ma_ref = sm->params.ma;
         out->buzzer = true;
@@ -515,11 +568,16 @@ void sm_step(exposure_sm_t *sm, const sm_inputs_t *raw, sm_outputs_t *out, uint3
     const float power = out->xray_on ? in->kv_fb * in->ma_fb : 0.0f;
     tube_tick(&sm->tube, power, dt);
 
+    /* Fokus rölesi her durumda komutu tutar (outputs_off sonrası) */
+    out->focus_small = sm->focus_cmd_small;
+
     /* Inter-Lock: jeneratörün ikinci izin kanalı */
     out->gen_interlock = out->preheat || out->xray_on;
 
     sm->prev_xray_cmd = out->xray_on && out->rl5_series;
     sm->prev_preheat_cmd = out->preheat;
+    sm->prev_kv_ref = out->kv_ref;
+    sm->prev_ma_ref = out->ma_ref;
 }
 
 bool sm_ack_fault(exposure_sm_t *sm)
@@ -584,6 +642,8 @@ const char *sm_reason_text(end_reason_t r)
     case END_LINK_DOWN:        return "Yazilim baglantisi yok";
     case END_LINK_LOST:        return "Isinlama baglanti koptugu icin kesildi";
     case END_LINK_LOST_SERIAL: return "Isinlama RS-232 baglantisi koptugu icin kesildi";
+    case END_FOCUS_RELAY:      return "Fokus rolesi uyusmazligi";
+    case END_REF_READBACK:     return "kV / mA referans cikisi uyusmazligi";
     case END__COUNT:           break;
     }
     return "?";

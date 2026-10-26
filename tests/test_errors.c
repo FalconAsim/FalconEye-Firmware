@@ -17,7 +17,7 @@ TEST(her_neden_icin_kod_var)
 TEST(her_tup_sonucu_icin_ayri_kod)
 {
     uint16_t seen[32] = {0};
-    for (int t = TUBE_ERR_KV_LOW; t <= TUBE_ERR_PARAM; t++) {
+    for (int t = TUBE_ERR_KV_LOW; t <= TUBE_ERR_NO_SMALL_FOCUS; t++) {
         const fe_error_t *e = fe_error_for(END_TUBE_REJECT, (tube_result_t)t);
         CHECK(e != NULL && e->code >= 200 && e->code < 300, "tup sonucu E2xx");
         if (e) {

@@ -66,6 +66,14 @@ static int line_has(const char *txt, int idx, const char *prefix)
     return strncmp(txt + 5, prefix, strlen(prefix)) == 0;
 }
 
+TEST(acilis_degerleri)
+{
+    setup();
+    const char *a = cmd("STATUS?");
+    CHECK(line_has(a, 1, "ACTUAL KV=60.0 MA=10 MS=100 MAS=1.00 FO=S MODE=RAD"),
+          "acilis: radyografi, kucuk fokus, kucuk fokus sinirlari icinde");
+}
+
 TEST(crc_test_vektorleri)
 {
     CHECK(tgp_crc16("123456789", 9) == 0x29B1, "CRC-16/CCITT-FALSE kontrol degeri");
@@ -122,7 +130,7 @@ TEST(ayar_gonderme)
 TEST(mas_teknigi)
 {
     setup();
-    const char *a = cmd("SET KV=70.0 MA=20 MAS=2.50");
+    const char *a = cmd("SET KV=70.0 MA=20 MAS=2.50 FO=L");
     CHECK(line_has(a, 1, "ACTUAL KV=70.0 MA=20 MS=125 MAS=2.50"), "MAS + MA -> sure hesaplanir");
     CHECK(line_has(cmd("SET MAS=2.0"), 0, "NAK 0002 E901"), "MAS var MA yok -> E901 (mA'yi yazilim belirler)");
     CHECK(line_has(cmd("SET MA=20 MS=100 MAS=2.0"), 0, "NAK 0003 E901"), "MS ve MAS birlikte -> E901");
@@ -140,7 +148,7 @@ TEST(ayar_reddi)
     CHECK(line_has(cmd("SET FOO=1"), 0, "NAK 0006 E901"), "bilinmeyen anahtar");
     CHECK(line_has(cmd("SET MA=25.5"), 0, "NAK 0007 E901"), "mA ondalikli olamaz");
     CHECK(line_has(cmd("SET KV=70.55"), 0, "NAK 0008 E901"), "kV en cok bir ondalik");
-    CHECK(sm.params.kv == 70.0f, "reddedilen ayar uygulanmadi");
+    CHECK(sm.params.kv == 60.0f, "reddedilen ayar uygulanmadi (acilis degeri 60 kV)");
     CHECK(line_has(cmd("MODE M=FLUORO"), 0, "NAK 0009 E906"), "floroskopi kapali");
     sm.cfg.fluoro_enabled = true;
     CHECK(line_has(cmd("SET KV=50.0 MA=10 MS=10000 FO=S"), 0, "ACK"), "floroskopi degerleri");
@@ -153,9 +161,9 @@ TEST(pc_manuel_modu)
 {
     setup();
     c.ctrl = TGP_CTRL_MANUAL;
-    CHECK(line_has(cmd("SET KV=60.0"), 0, "NAK 0001 E907"), "Manuel modda SET -> E907");
+    CHECK(line_has(cmd("SET KV=65.0"), 0, "NAK 0001 E907"), "Manuel modda SET -> E907");
     CHECK(line_has(cmd("MODE M=RAD"), 0, "NAK 0002 E907"), "Manuel modda MODE -> E907");
-    CHECK(sm.params.kv != 60.0f, "Manuel modda deger degismedi");
+    CHECK(sm.params.kv == 60.0f, "Manuel modda deger degismedi");
     const char *a = cmd("STATUS?");
     CHECK(line_has(a, 0, "STATUS ST=IDLE CTRL=MANUAL"), "Manuel modda okuma calisir");
     CHECK(line_has(cmd("VERSION?"), 0, "VERSION") && strstr(r, "CTRL=MANUAL") != NULL, "VERSION'da CTRL");
@@ -290,6 +298,19 @@ TEST(sinir_bildirimi)
           "floroskopi satiri");
 }
 
+TEST(tek_fokuslu_insert)
+{
+    setup();
+    tube_select(&sm.tube, TUBE_INSERT_D067SB);
+    sm.cfg.fluoro_enabled = true;
+    const char *a = cmd("LIMITS?");
+    CHECK(valid_lines(a) == 1 && line_has(a, 0, "LIMITS TUBE=D-067SB MODE=RAD FO=L KV=50.0-100.0 MA=1-22 MS=1-10000 P=1270"),
+          "tek fokus: yalniz FO=L satiri, floroskopi yok");
+    CHECK(line_has(cmd("SET KV=70.0 MA=5 MS=100 FO=S"), 0, "NAK 0002 E214"), "kucuk fokus -> E214");
+    CHECK(line_has(cmd("SET KV=45.0 MA=5 MS=100 FO=L"), 0, "NAK 0003 E201"), "45 kV < 50 kV -> E201");
+    CHECK(strstr(cmd("VERSION?"), "TUBE=D-067SB") != NULL, "VERSION'da insert");
+}
+
 TEST(baglanti_kopmasi)
 {
     setup();
@@ -332,6 +353,7 @@ TEST(uzun_satir)
 int main(void)
 {
     printf("TGP v1 (rev. 0.4) protokol testleri\n");
+    RUN(acilis_degerleri);
     RUN(crc_test_vektorleri);
     RUN(temel_komutlar);
     RUN(kartin_satir_sayaci);
@@ -348,6 +370,7 @@ int main(void)
     RUN(cekim_kaydi_ve_durum);
     RUN(hata_kodu_durumda);
     RUN(sinir_bildirimi);
+    RUN(tek_fokuslu_insert);
     RUN(baglanti_kopmasi);
     RUN(isinlamada_kisa_canlilik_esigi);
     RUN(uzun_satir);

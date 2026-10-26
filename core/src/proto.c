@@ -243,7 +243,7 @@ static void line_version(tgp_ctx_t *c, out_t *o)
     w_str(&w, " HW="); w_str(&w, c->hw_rev);
     w_str(&w, " TGP="); w_uint(&w, TGP_VERSION);
     w_str(&w, " IF="); w_str(&w, TGP_IF_REV);
-    w_str(&w, " TUBE="); w_str(&w, tube_insert_name());
+    w_str(&w, " TUBE="); w_str(&w, tube_insert_name(&c->sm->tube));
     w_str(&w, c->ctrl == TGP_CTRL_PC ? " CTRL=PC" : " CTRL=MANUAL");
     w_str(&w, c->link_sel == TGP_LINK_TGP ? " LINK=TGP" : " LINK=CURRENT");
     w_str(&w, " SN="); w_str(&w, c->serial);
@@ -301,8 +301,8 @@ static void lines_limits(tgp_ctx_t *c, out_t *o)
 {
     struct { focus_t f; exp_mode_t m; bool on; } rows[3] = {
         { FOCUS_LARGE, MODE_RADIOGRAPHY, true },
-        { FOCUS_SMALL, MODE_RADIOGRAPHY, tube_has_small_focus() },
-        { FOCUS_SMALL, MODE_FLUORO, tube_has_small_focus() && c->sm->cfg.fluoro_enabled },
+        { FOCUS_SMALL, MODE_RADIOGRAPHY, tube_has_small_focus(&c->sm->tube) },
+        { FOCUS_SMALL, MODE_FLUORO, tube_has_fluoro(&c->sm->tube) && c->sm->cfg.fluoro_enabled },
     };
     for (int i = 0; i < 3; i++) {
         if (!rows[i].on) continue;
@@ -310,7 +310,7 @@ static void lines_limits(tgp_ctx_t *c, out_t *o)
         tube_limits(&c->sm->tube, rows[i].f, rows[i].m, &l);
         char b[TGP_LINE_MAX];
         wbuf_t w = { b, sizeof b };
-        w_str(&w, "LIMITS TUBE="); w_str(&w, tube_insert_name());
+        w_str(&w, "LIMITS TUBE="); w_str(&w, tube_insert_name(&c->sm->tube));
         w_str(&w, rows[i].m == MODE_FLUORO ? " MODE=FLUORO" : " MODE=RAD");
         w_str(&w, rows[i].f == FOCUS_SMALL ? " FO=S" : " FO=L");
         w_str(&w, " KV="); w_fix(&w, l.kv_min, 1); w_str(&w, "-"); w_fix(&w, l.kv_max, 1);
@@ -387,7 +387,7 @@ static void cmd_set(tgp_ctx_t *c, out_t *o, int seq, const char *args, bool mode
     const uint32_t perr = parse_set(args, mode_only, &q);
     if (perr) { line_nak(c, o, seq, 'E', perr); return; }
 
-    if (q.p.focus == FOCUS_SMALL && !tube_has_small_focus()) {
+    if (q.p.focus == FOCUS_SMALL && !tube_has_small_focus(&c->sm->tube)) {
         line_nak(c, o, seq, 'E', 214); return;   /* E214: bu tüpte küçük fokus yok */
     }
     if (q.p.mode == MODE_FLUORO && !c->sm->cfg.fluoro_enabled) {

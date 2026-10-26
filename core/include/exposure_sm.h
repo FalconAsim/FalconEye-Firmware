@@ -54,6 +54,8 @@ typedef enum {
     END_LINK_DOWN,        /* PC modu: yazılım bağlantısı yok, hazırlık başlamaz / iptal (E701) */
     END_LINK_LOST,        /* PC modu: ışınlamada TGP bağlantısı koptu, ışınlama kesildi (E702) */
     END_LINK_LOST_SERIAL, /* PC modu: ışınlamada RS-232 (Current) bağlantısı koptu (E703) */
+    END_FOCUS_RELAY,      /* fokus rölesi geri bildirimi komutla uyuşmuyor (E406) */
+    END_REF_READBACK,     /* kV / mA referans (DAC) çıkışının geri okuması uyuşmuyor (E407) */
     END__COUNT
 } end_reason_t;
 
@@ -79,6 +81,9 @@ typedef struct {
     bool xray_line_fb;    /* geri okuma: J2 X-RAY ON hattı GND'ye çekilmiş (aktif) */
     bool preheat_line_fb; /* geri okuma: J2 PreHeat hattı aktif */
     bool pc_link_ok;      /* PC modu: seçili yazılım bağlantısı canlı (TGP veya Current) */
+    bool focus_fb_small;  /* fokus rölesi geri bildirimi: çekili = küçük fokus */
+    float kv_ref_fb;      /* kV referans çıkışının geri okuması (kV cinsinden) */
+    float ma_ref_fb;      /* mA referans çıkışının geri okuması (mA cinsinden) */
     float kv_fb;          /* ölçülen kV */
     float ma_fb;          /* ölçülen mA */
 } sm_inputs_t;
@@ -90,7 +95,7 @@ typedef struct {
     bool gen_interlock;   /* J2 Inter-Lock: yalnızca hazırlık ve ışınlamada kapalı (2. kanal) */
     bool det_prep;        /* senkron: dedektöre hazırlık isteği */
     bool det_exp_req;     /* senkron: dedektöre ışınlama isteği */
-    bool focus_small;     /* J2 FCS SML */
+    bool focus_small;     /* fokus rölesi: çekili = küçük fokus, bırakık = büyük (hataya güvenli) */
     bool lamp_prep;       /* J21 hazır/hazırlık lambası */
     bool lamp_exposure;   /* J21 ışınlama lambası */
     bool buzzer;          /* panel + J21 harici buzzer */
@@ -109,6 +114,8 @@ typedef struct {
     float gen_power_max_w;         /* 0 = varsayılan (FE_GEN_POWER_MAX_W) */
     bool pc_link_required;         /* PC kontrol modu: bağlantı zorunlu, koparsa ışınlama kesilir */
     bool pc_link_serial;           /* PC bağlantısı RS-232 (Current); false = TGP */
+    bool focus_relay_readback;     /* fokus rölesi durum geri bildirimi takılı */
+    bool ref_readback;             /* kV / mA referans çıkışı geri okuması takılı */
 } sm_config_t;
 
 /* Son ışınlamanın kaydı (DR yazılımına ve kayıt defterine gider) */
@@ -144,6 +151,11 @@ typedef struct {
     uint32_t irr_ms, irr_after_ms;
     float irr_thr_kv;      /* hat geri okuma uyuşmazlığı süresi */
     bool prev_xray_cmd, prev_preheat_cmd;
+    bool focus_cmd_small;      /* fokus rölesi komutu; yalnız filaman sürülmüyorken değişir */
+    uint32_t focus_settle_ms;  /* son fokus değişiminden beri */
+    uint32_t focus_bad_ms;
+    float prev_kv_ref, prev_ma_ref;
+    uint32_t ref_bad_ms;
     bool booted;               /* ilk adım yapıldı mı (açılışta takılı buton kontrolü) */
     float kv_sum, ma_sum;
     uint32_t n_samples;
@@ -159,6 +171,10 @@ typedef struct {
 #define SM_RL5_RELEASE_MS  20u   /* X-RAY ON kesildikten sonra RL5 açılır */
 
 void sm_init(exposure_sm_t *sm, const sm_config_t *cfg);
+
+/* Açılış değerleri: radyografi, çift fokuslu insertte küçük fokus.
+ * HAL kurulu inserti (tube_select) seçtikten sonra yeniden çağırır. */
+void sm_load_boot_defaults(exposure_sm_t *sm);
 
 /* Ekrandan veya DR yazılımından gelen ayar (arayüz tanımı rev. 0.4 §4):
  *  - BEKLE / KİLİT / HATA: serbest

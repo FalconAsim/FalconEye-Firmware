@@ -1,6 +1,7 @@
 /*
  * Tüp koruması: yük eğrisi, anot ısı modeli, görev döngüsü.
- * Tüp: Canon DF-161SBR (sabit anot, 1.6 / 0.5 fokus).
+ * Insert profilleri: Canon DF-161SBR (1.6 / 0.5), D-067SB (0.6), D-023 (0.2),
+ * CEI OX/105-4 (2.6). Kurulu insert servis menüsünden seçilir (tube_select).
  */
 #ifndef TUBE_H
 #define TUBE_H
@@ -9,6 +10,14 @@
 #include <stdint.h>
 
 typedef enum { FOCUS_LARGE = 0, FOCUS_SMALL = 1 } focus_t;
+
+typedef enum {
+    TUBE_INSERT_DF161SBR = 0,   /* varsayılan */
+    TUBE_INSERT_D067SB,
+    TUBE_INSERT_D023,
+    TUBE_INSERT_OX105_4,
+    TUBE_INSERT_COUNT
+} tube_insert_t;
 typedef enum { MODE_RADIOGRAPHY = 0, MODE_FLUORO = 1 } exp_mode_t;
 
 typedef struct {
@@ -33,20 +42,26 @@ typedef enum {
     TUBE_ERR_FLUORO_FOCUS,    /* floroskopi yalnızca küçük fokus */
     TUBE_ERR_FLUORO_KV,       /* floroskopi 40-60 kV */
     TUBE_ERR_FLUORO_POWER,    /* floroskopi en fazla 600 W */
-    TUBE_ERR_PARAM            /* geçersiz parametre */
+    TUBE_ERR_PARAM,           /* geçersiz parametre */
+    TUBE_ERR_NO_SMALL_FOCUS   /* kurulu insert tek fokuslu */
 } tube_result_t;
 
 typedef struct {
     float heat_j;            /* anottaki ısı (J) */
     uint32_t cooldown_ms;    /* görev döngüsünden kalan bekleme */
     float gen_power_max_w;   /* jeneratör gücü sınırı (servis ayarı; varsayılan FE_GEN_POWER_MAX_W) */
+    tube_insert_t insert;    /* kurulu insert (servis ayarı) */
 } tube_state_t;
 
 void tube_init(tube_state_t *st);
 
+/* Kurulu insertin seçimi (servis menüsü). Isı modeli sıfırlanır. */
+bool tube_select(tube_state_t *st, tube_insert_t id);
+
 /* Verilen fokus ve kV için, verilen sürede izin verilen en yüksek mA
- * (yük eğrisi, güvenlik payı uygulanmış). */
-float tube_rating_ma_max(focus_t focus, float kv, uint32_t time_ms);
+ * (yük eğrisi, güvenlik payı uygulanmış). st = NULL: DF-161SBR. */
+float tube_rating_ma_max_for(const tube_state_t *st, focus_t focus, float kv, uint32_t time_ms);
+float tube_rating_ma_max(focus_t focus, float kv, uint32_t time_ms);   /* DF-161SBR */
 
 /* Işınlamadan önce tam kontrol. */
 tube_result_t tube_check(const tube_state_t *st, const exposure_params_t *p);
@@ -70,8 +85,9 @@ typedef struct {
     float power_max_w;        /* fokus / mod sınırı ile jeneratör gücünün küçüğü */
 } tube_limits_t;
 
-const char *tube_insert_name(void);
-bool tube_has_small_focus(void);
+const char *tube_insert_name(const tube_state_t *st);
+bool tube_has_small_focus(const tube_state_t *st);
+bool tube_has_fluoro(const tube_state_t *st);
 void tube_limits(const tube_state_t *st, focus_t focus, exp_mode_t mode, tube_limits_t *out);
 
 #endif
