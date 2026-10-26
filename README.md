@@ -38,7 +38,20 @@ Jeneratör alarmı, kV/mA tolerans, yedek zamanlayıcı, acil stop --> HATA (ona
 
 - RL5 seri kontağı X-RAY ON'dan 15 ms önce kapanır, X-RAY ON kesildikten 20 ms sonra açılır.
 - Işınlama sırasında ölçülen mA'dan gerçek mAs hesaplanır ve kayda yazılır.
-- Hazırlık 30 s'den uzun tutulursa flamanı korumak için biter.
+- Hazırlık 30 s'den uzun tutulursa flamanı korumak için biter (değer değişikliği ısınmayı yeniden başlatsa da toplam süre sayılır).
+
+### Hazırlıkta değer değişikliği (arayüz tanımı rev. 0.4 §4)
+
+- HAZIRLIK / HAZIR'da kV, mA ve süre değişebilir: hazır lambası söner, filaman ısınması (4 s) baştan başlar. O anda 2. kademe basılıysa "hazır olmadan 2. kademe" (E101) kuralı çekimi engeller.
+- Fokus ve mod (radyografi / floroskopi) hazırlıkta değişmez (E213); fokus rölesi yük altında anahtarlanmaz.
+- Işınlamada değerler donar.
+- Servis sayacı: `warmup_count` (filaman ısınma sayısı).
+
+### PC / Manuel kontrol modu (arayüz tanımı rev. 0.4 §1.1, §5)
+
+- `sm_set_pc_link(sm, required, serial)`: PC modu = bağlantı zorunlu. Yalnız BEKLE / KİLİT'te değişir.
+- PC modunda bağlantı yokken hazırlık başlamaz (E701); hazırlıkta koparsa hazırlık iptal (KİLİT); **ışınlamada koparsa ışınlama aynı adımda kesilir** (E702 Ethernet / E703 RS-232, onay gerekir). Kayıtta `cut = true`, TGP'de `CUT=1`.
+- Manuel modda bağlantının çekime etkisi yoktur.
 
 ## Takılı buton ve kablo kısa devresi
 
@@ -94,7 +107,6 @@ Jeneratör alarmı, kV/mA tolerans, yedek zamanlayıcı, acil stop --> HATA (ona
 - PC / Manuel kontrol modu: Manuel modda ya da PC bağlantısı TGP değilken değer yazılamaz (E907).
 - Aynı SEQ ikinci kez gelirse komut yeniden uygulanmaz, önceki cevap tekrarlanır.
 - Canlılık: boşta 3 s, ışınlamada 750 ms; link / TCP kopması anında. Bağlantı kopunca DR'nin "dedektör hazır" bilgisi silinir.
-- Henüz yapılmadı (sonraki adım, `exposure_sm.c`): hazırlıkta değer değişikliğinin kabulü, PC modunda bağlantı kopunca ışınlamanın kesilmesi.
 
 ## Yedek zamanlayıcı (STM32G031)
 
@@ -106,6 +118,8 @@ Jeneratör alarmı, kV/mA tolerans, yedek zamanlayıcı, acil stop --> HATA (ona
 ## Donanım katmanı (şematikten sonra) için entegrasyon notları
 
 1. 1 ms zamanlayıcı kesmesinde: girişleri oku (debounce) → `det_map_inputs` → `sm_step` → `det_map_outputs` → çıkışları ve DAC'ı yaz (`calib_kv_ref_volts` → `calib_volts_to_dac`).
+   - `sm_inputs_t.pc_link_ok`: PC bağlantısı TGP ise `tgp_ctx_t.link_up`, Current ise RS-232 canlılığı. Her 1 ms'de `tgp_tick`; Ethernet PHY link düşünce veya TCP kapanınca `tgp_link_lost`.
+   - Panel menüsünde mod değişince hem `sm_set_pc_link` hem `tgp_ctx_t.ctrl` / `link_sel` güncellenir (yalnız BEKLE'de).
 2. HAZIR durumunda yedek zamanlayıcıya ARM gönder; `backup_ok` girişi yedek zamanlayıcının ENABLE geri okumasıdır.
 3. Durum değişince ve her çekimden sonra `tgp_fmt_event_*` ile olay satırı gönder.
 4. Açılışta `nv_load`; NV_LOAD_DEFAULTS ise ekranda "Kalibrasyon yok" uyarısı göster.

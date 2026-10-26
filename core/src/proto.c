@@ -292,7 +292,7 @@ static void line_done(tgp_ctx_t *c, out_t *o, const exposure_record_t *r, uint32
     w_str(&w, " IRR="); w_uint(&w, r->irr_ms);
     w_str(&w, " MAS="); w_fix(&w, r->mas_measured, 2);
     w_str(&w, r->kv_avg > 0.0f ? " MEAS=1" : " MEAS=0");
-    w_str(&w, " CUT=0");
+    w_str(&w, r->cut ? " CUT=1" : " CUT=0");
     w_str(&w, " END="); w_code(&w, fe_error_for(r->reason, TUBE_OK));
     out_line(c, o, b);
 }
@@ -388,10 +388,14 @@ static void cmd_set(tgp_ctx_t *c, out_t *o, int seq, const char *args, bool mode
     if (perr) { line_nak(c, o, seq, 'E', perr); return; }
 
     if (q.p.focus == FOCUS_SMALL && !tube_has_small_focus()) {
-        line_nak(c, o, seq, 'E', 214); return;
+        line_nak(c, o, seq, 'E', 214); return;   /* E214: bu tüpte küçük fokus yok */
     }
     if (q.p.mode == MODE_FLUORO && !c->sm->cfg.fluoro_enabled) {
         line_nak(c, o, seq, 'E', TGP_ERR_DISABLED); return;
+    }
+    if ((c->sm->state == ST_PREP || c->sm->state == ST_READY) &&
+        (q.p.focus != c->sm->params.focus || q.p.mode != c->sm->params.mode)) {
+        line_nak(c, o, seq, 'E', 213); return;   /* hazırlıkta fokus / mod değişmez */
     }
     /* Değer sınırları (anlık ısı / soğuma hariç; onlar çekim anında denetlenir) */
     tube_state_t cold = c->sm->tube;
@@ -403,7 +407,12 @@ static void cmd_set(tgp_ctx_t *c, out_t *o, int seq, const char *args, bool mode
         line_nak(c, o, seq, e ? e->prefix : 'E', e ? e->code : 212u);
         return;
     }
-    if (!sm_set_params(c->sm, &q.p)) { line_nak(c, o, seq, 'E', TGP_ERR_BUSY); return; }
+    switch (sm_set_params_ex(c->sm, &q.p)) {
+    case SM_SET_OK:              break;
+    case SM_SET_BUSY:            line_nak(c, o, seq, 'E', TGP_ERR_BUSY); return;
+    case SM_SET_FOCUS_LOCKED:    line_nak(c, o, seq, 'E', 213); return;
+    case SM_SET_FLUORO_DISABLED: line_nak(c, o, seq, 'E', TGP_ERR_DISABLED); return;
+    }
     line_ack(c, o, seq);
     line_actual(c, o);
 }

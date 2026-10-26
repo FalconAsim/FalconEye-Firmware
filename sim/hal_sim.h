@@ -15,6 +15,7 @@ typedef struct {
     bool backup_ok;
     bool detector_ready;
     bool detector_enable, detector_error;
+    bool pc_link_ok;        /* PC modu: yazılım bağlantısı canlı (varsayılan true) */
 
     /* Kablo ve buton arızası enjeksiyonu */
     bool hs1_no_short;      /* 1. kademe NO hattı kısa devre (basılı görünür) */

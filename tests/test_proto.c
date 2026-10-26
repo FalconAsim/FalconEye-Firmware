@@ -177,6 +177,32 @@ TEST(isinlama_sirasinda_ayar_degismez)
     CHECK(sm.params.kv == 70.0f, "deger degismedi");
 }
 
+TEST(hazirlikta_set)
+{
+    setup();
+    cmd("SET KV=70.0 MA=20 MS=100 FO=L");
+    s.hs1 = true; sim_run(&s, &sm, 4100);
+    CHECK(sm.state == ST_READY, "HAZIR");
+    const char *a = cmd("SET KV=75.0");
+    CHECK(line_has(a, 0, "ACK 0002") && line_has(a, 1, "ACTUAL KV=75.0"), "hazirlikta kV kabul");
+    CHECK(line_has(cmd("STATUS?"), 0, "STATUS ST=PREHEAT"), "isinma bastan: PREHEAT");
+    CHECK(line_has(cmd("SET FO=S MA=10"), 0, "NAK 0004 E213"), "hazirlikta fokus -> E213");
+    CHECK(sm.params.focus == FOCUS_LARGE && sm.params.ma == 20.0f, "fokus ve mA degismedi");
+}
+
+TEST(kesilen_cekim_kaydi)
+{
+    setup();
+    sm_set_pc_link(&sm, true, false);
+    cmd("SET KV=60.0 MA=10 MS=2000 FO=L");
+    s.hs1 = true; sim_run(&s, &sm, 4100);
+    s.hs2 = true; sim_run(&s, &sm, 300);
+    s.pc_link_ok = false; sim_run(&s, &sm, 2);
+    char ev[TGP_REPLY_MAX];
+    tgp_fmt_done(&c, &sm.last_record, ev, sizeof ev);
+    CHECK(strstr(ev, " CUT=1 END=E702*") != NULL, "DONE kaydinda CUT=1, E702");
+}
+
 TEST(isinlama_komutu_yok)
 {
     setup();
@@ -314,6 +340,8 @@ int main(void)
     RUN(ayar_reddi);
     RUN(pc_manuel_modu);
     RUN(isinlama_sirasinda_ayar_degismez);
+    RUN(hazirlikta_set);
+    RUN(kesilen_cekim_kaydi);
     RUN(isinlama_komutu_yok);
     RUN(saglama_ve_bozuk_satir);
     RUN(yinelenen_istek);

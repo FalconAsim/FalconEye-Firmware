@@ -10,8 +10,10 @@
  *   E2xx  Tüp koruması (ayar veya bekleme gerekir)
  *   E3xx  Jeneratör ve ışınlama kalitesi
  *   E4xx  Donanım ve kablo arızası (servis gerekir)
- *   E5xx  Dedektör ve haberleşme
+ *   E5xx  Dedektör
  *   W6xx  Uyarılar (ışınlamayı engellemez)
+ *   E7xx  Haberleşme (PC kontrol modu)
+ *   E9xx  Protokol cevabı (yalnız TGP NAK; tabloda yok, ekranda gösterilmez)
  */
 #ifndef ERROR_CODES_H
 #define ERROR_CODES_H
@@ -41,6 +43,9 @@ typedef struct {
  * Normal bitişlerde (END_NONE, END_TIME_DONE, END_RELEASED) NULL döner.
  * END_TUBE_REJECT için tüp kontrol sonucu ayrıntılı kodu belirler. */
 const fe_error_t *fe_error_for(end_reason_t reason, tube_result_t tube);
+
+/* Koda göre kayıt (ör. E213, E214 doğrudan protokolden) */
+const fe_error_t *fe_error_by_code(uint16_t code);
 
 /* Uyarılar */
 const fe_error_t *fe_warning_fluoro_cumulative(void);
