@@ -149,7 +149,8 @@ Kurulu insert servis menüsünden seçilir (`tube_select`); `LIMITS?` ve `VERSIO
 
 ## Fokus rölesi (yeni kartta)
 
-- Röle **bırakık = büyük fokus**, çekili = küçük fokus (hataya güvenli: arıza büyük fokusa düşer). Açılışta büyük fokus.
+- **Açılış değerleri:** radyografi modu (floroskopi değil), çift fokuslu insertte **küçük fokus** (60 kV, 10 mA, 100 ms); tek fokuslu insertte tek fokus. Insert seçildikten sonra `sm_load_boot_defaults`.
+- Röle **bırakık = büyük fokus**, çekili = küçük fokus (hataya güvenli: röle veya sürücü arızası büyük fokusa düşer; küçük fokus değerleri büyük fokusta zararsızdır). Açılışta küçük fokus için röle çekilir ve 50 ms oturma beklenir.
 - Komut yalnız filaman sürülmüyorken değişir; değişimden sonra 50 ms oturma beklenir, bu sürede PreHeat verilmez (yük altında anahtarlama yok).
 - Geri bildirim (`focus_relay_readback`): röle kontağı veya zorlamalı kılavuzlu röle. Oturduktan sonra 100 ms uyuşmazlık → **E406** (servis); ışınlamadaysa ışınlama kesilir.
 

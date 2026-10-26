@@ -444,7 +444,12 @@ TEST(fokus_rolesi_yuk_altinda_anahtarlanmaz)
 {
     setup(false);
     sm.cfg.focus_relay_readback = true;
-    CHECK(!s.last_out.focus_small, "acilista role birakik = buyuk fokus");
+    CHECK(sm.params.focus == FOCUS_SMALL && sm.params.mode == MODE_RADIOGRAPHY,
+          "acilis: kucuk fokus, radyografi (floroskopi degil)");
+    CHECK(s.last_out.focus_small && s.focus_fb, "acilista kucuk fokus rolesi cekili");
+    set_rad(70, 20, 100, FOCUS_LARGE);     /* büyük fokusa geç */
+    sim_run(&s, &sm, 100);
+    CHECK(!s.last_out.focus_small && !s.focus_fb, "beklemede buyuk fokus");
     set_rad(60, 10, 100, FOCUS_SMALL);
     s.hs1 = true;                     /* fokus degisir degismez 1. kademe */
     sim_run(&s, &sm, 20);
@@ -464,6 +469,8 @@ TEST(fokus_rolesi_takili)
 {
     setup(false);
     sm.cfg.focus_relay_readback = true;
+    set_rad(70, 20, 100, FOCUS_LARGE);
+    sim_run(&s, &sm, 100);            /* röle büyük fokusta */
     s.focus_stuck = true;             /* röle büyük fokusta takılı */
     set_rad(60, 10, 100, FOCUS_SMALL);
     s.hs1 = true;
@@ -513,6 +520,18 @@ TEST(referans_isinlamada_sapti)
     sim_run(&s, &sm, FE_REF_MISMATCH_MS + 2);
     CHECK(sm.state == ST_FAULT && sm.last_reason == END_REF_READBACK, "isinlama kesildi E407");
     CHECK(!s.last_out.xray_on, "X-RAY ON kapali");
+}
+
+TEST(tek_fokuslu_insertte_acilis)
+{
+    setup(false);
+    tube_select(&sm.tube, TUBE_INSERT_D067SB);
+    sm_load_boot_defaults(&sm);
+    CHECK(sm.params.focus == FOCUS_LARGE && sm.params.mode == MODE_RADIOGRAPHY, "tek fokus: buyuk (tek) fokus");
+    CHECK(tube_check(&sm.tube, &sm.params) == TUBE_OK, "acilis degerleri D-067SB sinirlari icinde");
+    tube_select(&sm.tube, TUBE_INSERT_DF161SBR);
+    sm_load_boot_defaults(&sm);
+    CHECK(tube_check(&sm.tube, &sm.params) == TUBE_OK, "acilis degerleri DF-161SBR kucuk fokusta uygun");
 }
 
 TEST(kalibrasyon_yok_uyarisi)
@@ -867,6 +886,7 @@ int main(void)
     RUN(fokus_rolesi_isinlamada_birakti);
     RUN(referans_cikisi_geri_okuma);
     RUN(referans_isinlamada_sapti);
+    RUN(tek_fokuslu_insertte_acilis);
     RUN(kalibrasyon_yok_uyarisi);
     return REPORT();
 }

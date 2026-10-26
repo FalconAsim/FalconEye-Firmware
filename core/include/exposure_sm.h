@@ -172,6 +172,10 @@ typedef struct {
 
 void sm_init(exposure_sm_t *sm, const sm_config_t *cfg);
 
+/* Açılış değerleri: radyografi, çift fokuslu insertte küçük fokus.
+ * HAL kurulu inserti (tube_select) seçtikten sonra yeniden çağırır. */
+void sm_load_boot_defaults(exposure_sm_t *sm);
+
 /* Ekrandan veya DR yazılımından gelen ayar (arayüz tanımı rev. 0.4 §4):
  *  - BEKLE / KİLİT / HATA: serbest
  *  - HAZIRLIK / HAZIR: kV, mA, süre kabul edilir; değer değiştiyse filaman

@@ -33,13 +33,25 @@ void sm_init(exposure_sm_t *sm, const sm_config_t *cfg)
     sm->cfg = *cfg;
     tube_init(&sm->tube);
     if (cfg->gen_power_max_w > 0.0f) sm->tube.gen_power_max_w = cfg->gen_power_max_w;
-    sm->params.kv = 70.0f;
-    sm->params.ma = 20.0f;
-    sm->params.time_ms = 100u;
-    sm->params.focus = FOCUS_LARGE;
-    sm->params.mode = MODE_RADIOGRAPHY;
-    sm->focus_settle_ms = FE_FOCUS_SETTLE_MS;   /* açılışta röle bırakık = büyük fokus */
+    sm_load_boot_defaults(sm);
     enter(sm, ST_IDLE);
+}
+
+/* Açılış değerleri (Asım, 26.10.2026): radyografi modu (floroskopi değil),
+ * insert çift fokusluysa KÜÇÜK fokus. Değerler küçük fokusun yük eğrisi
+ * içinde kalır. Tek fokuslu insertte büyük (tek) fokus. */
+void sm_load_boot_defaults(exposure_sm_t *sm)
+{
+    const bool small = tube_has_small_focus(&sm->tube);
+    sm->params.kv = 60.0f;
+    sm->params.ma = small ? 10.0f : 5.0f;
+    sm->params.time_ms = 100u;
+    sm->params.focus = small ? FOCUS_SMALL : FOCUS_LARGE;
+    sm->params.mode = MODE_RADIOGRAPHY;
+    /* Röle bırakık = büyük fokus; küçük fokus komutu ilk adımda verilir ve
+     * 50 ms oturma süresi beklenir. */
+    sm->focus_cmd_small = false;
+    sm->focus_settle_ms = FE_FOCUS_SETTLE_MS;
 }
 
 sm_set_result_t sm_set_params_ex(exposure_sm_t *sm, const exposure_params_t *p)
