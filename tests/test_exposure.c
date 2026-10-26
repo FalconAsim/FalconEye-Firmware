@@ -287,9 +287,169 @@ TEST(isinlamada_ayar_degismez)
     setup(false);
     set_rad(70, 20, 1000, FOCUS_LARGE);
     prep_to_ready();
+    s.hs2 = true;
+    sim_run(&s, &sm, 100);
+    CHECK(sm.state == ST_EXPOSING, "isinlama suruyor");
     exposure_params_t p = { 100, 30, 1000, FOCUS_LARGE, MODE_RADIOGRAPHY };
-    CHECK(!sm_set_params(&sm, &p), "hazirken ayar degismez");
+    CHECK(sm_set_params_ex(&sm, &p) == SM_SET_BUSY, "isinlamada ayar degismez");
     CHECK(sm.params.kv == 70.0f, "kV ayni kaldi");
+}
+
+/* Arayüz tanımı rev. 0.4 §4: hazırlıkta kV/mA/süre kabul, ısınma baştan */
+TEST(hazirlikta_deger_degisimi)
+{
+    setup(false);
+    set_rad(70, 20, 100, FOCUS_LARGE);
+    prep_to_ready();
+    CHECK(sm.state == ST_READY, "HAZIR");
+    const uint32_t w0 = sm.warmup_count;
+    exposure_params_t p = { 80, 25, 120, FOCUS_LARGE, MODE_RADIOGRAPHY };
+    CHECK(sm_set_params_ex(&sm, &p) == SM_SET_OK, "hazirken kV/mA/sure kabul");
+    CHECK(sm.params.kv == 80.0f && sm.params.ma == 25.0f && sm.params.time_ms == 120u, "yeni degerler");
+    CHECK(sm.state == ST_PREP && sm.warmup_count == w0 + 1u, "hazir lambasi sondu, isinma bastan");
+    sim_run(&s, &sm, 1);
+    CHECK(!s.last_out.ready_indicator, "hazir gostergesi kapali");
+    sim_run(&s, &sm, 3900);
+    CHECK(sm.state == ST_PREP, "4 s dolmadan hazir olmaz");
+    sim_run(&s, &sm, 200);
+    CHECK(sm.state == ST_READY, "4 s sonra yeniden HAZIR");
+    s.hs2 = true;
+    sim_run(&s, &sm, 300);
+    CHECK(sm.last_record.reason == END_TIME_DONE && sm.last_record.set.kv == 80.0f, "yeni degerle cekim");
+
+    /* Aynı değerle SET ısınmayı yeniden başlatmaz */
+    release_all(); sim_run(&s, &sm, 10);
+    sim_run(&s, &sm, 40000);   /* soguma */
+    prep_to_ready();
+    CHECK(sm.state == ST_READY, "HAZIR (2)");
+    CHECK(sm_set_params_ex(&sm, &p) == SM_SET_OK && sm.state == ST_READY, "degismeyen deger: hazir kalir");
+}
+
+TEST(hazirken_degisim_ve_ikinci_kademe)
+{
+    setup(false);
+    set_rad(70, 20, 100, FOCUS_LARGE);
+    prep_to_ready();
+    s.hs2 = true;                  /* operatör 2. kademeye basmak üzere */
+    exposure_params_t p = { 75, 20, 100, FOCUS_LARGE, MODE_RADIOGRAPHY };
+    sm_set_params_ex(&sm, &p);     /* tam o anda değer değişti */
+    sim_run(&s, &sm, 50);
+    CHECK(s.xray_on_ms == 0, "hazir lambasi gorulmeden cekim yok");
+    CHECK(sm.state == ST_LOCKED && sm.last_reason == END_EARLY_STAGE2, "E101: butonu tamamen birakin");
+    CHECK(fe_error_for(sm.last_reason, TUBE_OK)->code == 101, "kod E101");
+}
+
+TEST(hazirlikta_fokus_ve_mod_degismez)
+{
+    setup(false);
+    set_rad(60, 10, 100, FOCUS_LARGE);
+    prep_to_ready();
+    exposure_params_t p = { 60, 10, 100, FOCUS_SMALL, MODE_RADIOGRAPHY };
+    CHECK(sm_set_params_ex(&sm, &p) == SM_SET_FOCUS_LOCKED, "hazirlikta fokus degismez");
+    exposure_params_t q = { 50, 10, 5000, FOCUS_LARGE, MODE_FLUORO };
+    CHECK(sm_set_params_ex(&sm, &q) == SM_SET_FOCUS_LOCKED, "hazirlikta mod degismez");
+    CHECK(sm.state == ST_READY && sm.params.focus == FOCUS_LARGE, "hazir kaldi, deger ayni");
+    CHECK(fe_error_by_code(213) != NULL, "E213 tabloda");
+}
+
+TEST(degisimler_hazirlik_suresini_uzatmaz)
+{
+    setup(false);
+    set_rad(70, 20, 100, FOCUS_LARGE);
+    s.hs1 = true;
+    for (int i = 0; i < 9; i++) {           /* her 3,5 s'de bir değer değişir */
+        sim_run(&s, &sm, 3500);
+        exposure_params_t p = { (float)(70 + i + 1), 20, 100, FOCUS_LARGE, MODE_RADIOGRAPHY };
+        sm_set_params_ex(&sm, &p);
+    }
+    sim_run(&s, &sm, 100);
+    CHECK(sm.state == ST_LOCKED && sm.last_reason == END_PREP_TIMEOUT,
+          "toplam 30 s'yi asinca hazirlik biter (E102)");
+}
+
+/* Arayüz tanımı rev. 0.4 §5: PC modunda bağlantı zorunlu */
+TEST(pc_modu_baglanti_yokken_hazirlik_baslamaz)
+{
+    setup(false);
+    CHECK(sm_set_pc_link(&sm, true, false), "PC modu");
+    s.pc_link_ok = false;
+    set_rad(70, 20, 100, FOCUS_LARGE);
+    s.hs1 = true;
+    sim_run(&s, &sm, 100);
+    CHECK(sm.state == ST_LOCKED && sm.last_reason == END_LINK_DOWN, "baglanti yok: hazirlik yok (E701)");
+    CHECK(!s.last_out.preheat, "PreHeat yok");
+    CHECK(fe_error_for(END_LINK_DOWN, TUBE_OK)->code == 701, "kod E701");
+    release_all(); sim_run(&s, &sm, 10);
+    CHECK(sm_set_pc_link(&sm, false, false), "Manuel moda gecis (BEKLE'de)");
+    s.hs1 = true;
+    sim_run(&s, &sm, 4100);
+    CHECK(sm.state == ST_READY, "Manuel modda baglanti gerekmez");
+    CHECK(!sm_set_pc_link(&sm, true, false), "hazirlikta mod degistirilemez");
+}
+
+TEST(pc_modu_hazirlikta_kopma)
+{
+    setup(false);
+    sm_set_pc_link(&sm, true, false);
+    set_rad(70, 20, 100, FOCUS_LARGE);
+    prep_to_ready();
+    s.pc_link_ok = false;
+    sim_run(&s, &sm, 2);
+    CHECK(sm.state == ST_LOCKED && sm.last_reason == END_LINK_DOWN, "hazirlik iptal");
+    CHECK(!s.last_out.preheat, "PreHeat kapandi");
+    s.pc_link_ok = true;
+    s.hs2 = true;
+    sim_run(&s, &sm, 300);
+    CHECK(s.xray_on_ms == 0, "baglanti donse de tam birakmadan cekim yok");
+}
+
+TEST(pc_modu_isinlamada_kopma_keser)
+{
+    setup(false);
+    sm_set_pc_link(&sm, true, false);
+    set_rad(60, 10, 2000, FOCUS_LARGE);
+    prep_to_ready();
+    s.hs2 = true;
+    sim_run(&s, &sm, 500);
+    CHECK(sm.state == ST_EXPOSING, "isinlama suruyor");
+    s.pc_link_ok = false;
+    const uint32_t before = s.xray_on_ms;
+    sim_run(&s, &sm, 1);
+    CHECK(sm.state == ST_FAULT && sm.last_reason == END_LINK_LOST, "isinlama kesildi, HATA (E702)");
+    CHECK(!s.last_out.xray_on && !s.last_out.preheat, "X-RAY ON ve PreHeat ayni adimda kapali");
+    CHECK(s.xray_on_ms == before, "kesmeden sonra isinlama yok");
+    CHECK(sm.last_record.cut && sm.last_record.actual_ms < 2000u, "kayitta CUT, gerceklesen sure");
+    CHECK(fe_error_for(END_LINK_LOST, TUBE_OK)->code == 702 &&
+          fe_error_for(END_LINK_LOST, TUBE_OK)->severity == SEV_ERROR, "E702 onay gerektirir");
+    s.pc_link_ok = true;
+    sim_run(&s, &sm, 100);
+    CHECK(sm.state == ST_FAULT, "baglanti donunce kendiliginden kalkmaz");
+    CHECK(sm_ack_fault(&sm) && sm.state == ST_LOCKED, "panelden onay");
+}
+
+TEST(pc_modu_rs232_kopma)
+{
+    setup(false);
+    sm_set_pc_link(&sm, true, true);
+    set_rad(60, 10, 2000, FOCUS_LARGE);
+    prep_to_ready();
+    s.hs2 = true; sim_run(&s, &sm, 300);
+    s.pc_link_ok = false; sim_run(&s, &sm, 1);
+    CHECK(sm.last_reason == END_LINK_LOST_SERIAL && fe_error_for(sm.last_reason, TUBE_OK)->code == 703,
+          "RS-232 kopmasi E703");
+}
+
+TEST(manuel_modda_kopma_etkisiz)
+{
+    setup(false);
+    sm_set_pc_link(&sm, false, false);
+    set_rad(60, 10, 500, FOCUS_LARGE);
+    prep_to_ready();
+    s.hs2 = true;
+    sim_run(&s, &sm, 100);
+    s.pc_link_ok = false;
+    sim_run(&s, &sm, 600);
+    CHECK(sm.last_record.reason == END_TIME_DONE && !sm.last_record.cut, "Manuel: cekim normal biter");
 }
 
 TEST(acilista_takili_buton)
@@ -611,5 +771,14 @@ int main(void)
     RUN(floroskopi_opsiyonu_kapali);
     RUN(guc_siniri_ayari);
     RUN(erken_kademe_sonrasi_basili_tutma);
+    RUN(hazirlikta_deger_degisimi);
+    RUN(hazirken_degisim_ve_ikinci_kademe);
+    RUN(hazirlikta_fokus_ve_mod_degismez);
+    RUN(degisimler_hazirlik_suresini_uzatmaz);
+    RUN(pc_modu_baglanti_yokken_hazirlik_baslamaz);
+    RUN(pc_modu_hazirlikta_kopma);
+    RUN(pc_modu_isinlamada_kopma_keser);
+    RUN(pc_modu_rs232_kopma);
+    RUN(manuel_modda_kopma_etkisiz);
     return REPORT();
 }

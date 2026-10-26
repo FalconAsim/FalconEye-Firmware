@@ -62,6 +62,12 @@ static const fe_error_t table[] = {
     { 212, 'E', SEV_INFO,    "Geçersiz ayar",
       "Çekim değerlerinden biri geçersiz (ör. süre veya mA sıfır).",
       "Çekim değerlerini yeniden girin." },
+    { 213, 'E', SEV_INFO,    "Hazırlıkta fokus veya mod değiştirilemez",
+      "1. kademe basılıyken fokus veya radyografi / floroskopi modu değiştirilmek istendi. Fokus rölesi yük altında anahtarlanmaz.",
+      "Butonu bırakın, fokusu veya modu değiştirin, sonra yeniden hazırlığa başlayın." },
+    { 214, 'E', SEV_INFO,    "Bu tüpte küçük fokus yok",
+      "Kurulu tüp insertinin tek fokusu var; küçük fokus seçilemez.",
+      "Büyük fokusla çalışın. Küçük fokus gerekiyorsa çift fokuslu insert için servise danışın." },
     { 220, 'E', SEV_ERROR,   "Tüp aşırı sıcak",
       "Tüp termik anahtarı açıldı.",
       "Tüpün soğumasını bekleyin. Hata soğuk tüpte sürüyorsa servisi arayın." },
@@ -118,6 +124,17 @@ static const fe_error_t table[] = {
     { 503, 'E', SEV_ERROR,   "Dedektör hatası",
       "Dedektör senkron hattından hata bildirdi.",
       "DR yazılımında dedektörün durumunu kontrol edin, ekrandan onaylayın ve yeniden deneyin." },
+
+    /* --- E7xx Haberleşme (PC kontrol modu) --- */
+    { 701, 'E', SEV_INFO,    "Yazılım bağlantısı yok",
+      "Panel PC modunda; DR yazılımı ile bağlantı yok (ağ kablosu, yazılım kapalı veya IP ayarı). PC modunda bağlantı yokken hazırlık başlamaz.",
+      "Ağ kablosunu ve DR yazılımını kontrol edin. Yazılımsız çalışmak için menüden Manuel moda geçin." },
+    { 702, 'E', SEV_ERROR,   "Işınlama bağlantı koptuğu için kesildi",
+      "Işınlama sırasında DR yazılımı ile Ethernet bağlantısı koptu; görüntü kaydedilemeyeceği için ışınlama kesildi.",
+      "Görüntüyü kontrol edin, gerekirse çekimi tekrarlayın. Ağ kablosunu kontrol edin; kablosuz ağ kullanmayın. Ekrandan onaylayın." },
+    { 703, 'E', SEV_ERROR,   "Işınlama RS-232 bağlantısı koptuğu için kesildi",
+      "Işınlama sırasında DR yazılımı ile RS-232 (Current) bağlantısı koptu.",
+      "Görüntüyü kontrol edin, gerekirse çekimi tekrarlayın. Seri kabloyu kontrol edin. Ekrandan onaylayın." },
 
     /* --- W6xx Uyarılar --- */
     { 601, 'W', SEV_WARNING, "Floroskopi 5 dakikaya ulaştı",
@@ -184,11 +201,16 @@ const fe_error_t *fe_error_for(end_reason_t r, tube_result_t t)
     case END_ESTOP_CHANNEL:    return by_code(404);
     case END_LINE_FAULT:       return by_code(405);
     case END_DETECTOR_TIMEOUT: return by_code(501);
+    case END_LINK_DOWN:        return by_code(701);
+    case END_LINK_LOST:        return by_code(702);
+    case END_LINK_LOST_SERIAL: return by_code(703);
     }
     return NULL;
 }
 
 const fe_error_t *fe_warning_fluoro_cumulative(void) { return by_code(601); }
+
+const fe_error_t *fe_error_by_code(uint16_t code) { return by_code(code); }
 
 const fe_error_t *fe_error_table(uint32_t *count)
 {

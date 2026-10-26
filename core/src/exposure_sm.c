@@ -41,15 +41,47 @@ void sm_init(exposure_sm_t *sm, const sm_config_t *cfg)
     enter(sm, ST_IDLE);
 }
 
-bool sm_set_params(exposure_sm_t *sm, const exposure_params_t *p)
+sm_set_result_t sm_set_params_ex(exposure_sm_t *sm, const exposure_params_t *p)
 {
-    if (sm->state != ST_IDLE && sm->state != ST_LOCKED) {
-        return false;   /* hazırlık ve ışınlama sırasında ayar değişmez */
+    if (sm->state == ST_EXPOSING) {
+        return SM_SET_BUSY;   /* ışınlamada değerler donar */
     }
     if (p->mode == MODE_FLUORO && !sm->cfg.fluoro_enabled) {
-        return false;   /* floroskopi opsiyonu kapalı */
+        return SM_SET_FLUORO_DISABLED;
+    }
+    if (sm->state == ST_PREP || sm->state == ST_READY) {
+        /* Fokus rölesi yük altında anahtarlanmaz; mod değişimi (el butonu /
+         * pedal) hazırlığın anlamını değiştirir. İkisi de hazırlıkta yasak. */
+        if (p->focus != sm->params.focus || p->mode != sm->params.mode) {
+            return SM_SET_FOCUS_LOCKED;
+        }
+        const bool changed = p->kv != sm->params.kv || p->ma != sm->params.ma ||
+                             p->time_ms != sm->params.time_ms;
+        sm->params = *p;
+        if (changed) {
+            /* Hazır lambası söner, ısınma baştan. O anda 2. kademe basılıysa
+             * HAZIRLIK'taki "hazır olmadan 2. kademe" kuralı çekimi engeller. */
+            enter(sm, ST_PREP);
+            sm->warmup_count++;
+        }
+        return SM_SET_OK;
     }
     sm->params = *p;
+    return SM_SET_OK;
+}
+
+bool sm_set_params(exposure_sm_t *sm, const exposure_params_t *p)
+{
+    return sm_set_params_ex(sm, p) == SM_SET_OK;
+}
+
+bool sm_set_pc_link(exposure_sm_t *sm, bool required, bool serial)
+{
+    if (sm->state != ST_IDLE && sm->state != ST_LOCKED) {
+        return false;
+    }
+    sm->cfg.pc_link_required = required;
+    sm->cfg.pc_link_serial = serial;
     return true;
 }
 
@@ -59,7 +91,7 @@ static bool is_fault_reason(end_reason_t r)
            r == END_BACKUP_TIMER || r == END_ESTOP ||
            r == END_BUTTON_STUCK || r == END_INPUT_CHANNEL || r == END_ESTOP_CHANNEL ||
            r == END_LINE_FAULT || r == END_TIME_DEV || r == END_DETECTOR_ERROR ||
-           r == END_DETECTOR_WINDOW;
+           r == END_DETECTOR_WINDOW || r == END_LINK_LOST || r == END_LINK_LOST_SERIAL;
 }
 
 static bool is_fluoro(const exposure_sm_t *sm)
@@ -82,6 +114,7 @@ static void finish_exposure(exposure_sm_t *sm, end_reason_t reason)
     r->kv_avg = sm->n_samples ? sm->kv_sum / (float)sm->n_samples : 0.0f;
     r->ma_avg = sm->n_samples ? sm->ma_sum / (float)sm->n_samples : 0.0f;
     r->reason = reason;
+    r->cut = reason == END_LINK_LOST || reason == END_LINK_LOST_SERIAL;
     r->valid = true;
 
     if (sm->t_expose_ms > 0u) {
@@ -246,6 +279,16 @@ void sm_step(exposure_sm_t *sm, const sm_inputs_t *raw, sm_outputs_t *out, uint3
         }
     }
 
+    /* PC modu: yazılım bağlantısı zorunlu (arayüz tanımı rev. 0.4 §5).
+     * Işınlamada koparsa ışınlama kesilir; hazırlıkta koparsa hazırlık iptal. */
+    if (sm->cfg.pc_link_required && !in->pc_link_ok) {
+        if (sm->state == ST_EXPOSING) {
+            finish_exposure(sm, sm->cfg.pc_link_serial ? END_LINK_LOST_SERIAL : END_LINK_LOST);
+        } else if (sm->state == ST_PREP || sm->state == ST_READY) {
+            lock(sm, END_LINK_DOWN);
+        }
+    }
+
     switch (sm->state) {
     case ST_IDLE:
         if (in->hs_stage2) {
@@ -255,6 +298,10 @@ void sm_step(exposure_sm_t *sm, const sm_inputs_t *raw, sm_outputs_t *out, uint3
                 lock(sm, !in->door_ok ? END_INTERLOCK : END_TUBE_THERMAL);
                 break;
             }
+            if (sm->cfg.pc_link_required && !in->pc_link_ok) {
+                lock(sm, END_LINK_DOWN);   /* PC modu: bağlantı yokken hazırlık başlamaz */
+                break;
+            }
             sm->last_tube_result = tube_check(&sm->tube, &sm->params);
             if (sm->last_tube_result != TUBE_OK) {
                 lock(sm, END_TUBE_REJECT);
@@ -262,6 +309,8 @@ void sm_step(exposure_sm_t *sm, const sm_inputs_t *raw, sm_outputs_t *out, uint3
             }
             sm->last_reason = END_NONE;
             enter(sm, ST_PREP);
+            sm->prep_total_ms = 0u;
+            sm->warmup_count++;
         }
         break;
 
@@ -288,8 +337,10 @@ void sm_step(exposure_sm_t *sm, const sm_inputs_t *raw, sm_outputs_t *out, uint3
             outputs_off(out);
             break;
         }
-        /* t_state_ms HAZIRLIK'ta sıfırlanır; HAZIR'a geçişte korunur */
-        if (sm->t_state_ms >= FE_PREP_HOLD_MAX_MS) {
+        /* 1. kademenin toplam süresi: değer değişikliği ısınmayı yeniden
+         * başlatsa da flamanı korumak için toplam süre sınırlıdır */
+        sm->prep_total_ms += dt;
+        if (sm->prep_total_ms >= FE_PREP_HOLD_MAX_MS) {
             lock(sm, END_PREP_TIMEOUT);
             outputs_off(out);
             break;
@@ -530,6 +581,9 @@ const char *sm_reason_text(end_reason_t r)
     case END_TIME_DEV:         return "Isinlama suresi sapmasi";
     case END_DETECTOR_WINDOW:  return "Dedektor penceresi erken kapandi";
     case END_DETECTOR_ERROR:   return "Dedektor hatasi";
+    case END_LINK_DOWN:        return "Yazilim baglantisi yok";
+    case END_LINK_LOST:        return "Isinlama baglanti koptugu icin kesildi";
+    case END_LINK_LOST_SERIAL: return "Isinlama RS-232 baglantisi koptugu icin kesildi";
     case END__COUNT:           break;
     }
     return "?";

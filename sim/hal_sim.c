@@ -10,6 +10,7 @@ void sim_init(sim_t *s)
     s->estop_ok = true;
     s->backup_ok = true;
     s->detector_ready = true;
+    s->pc_link_ok = true;
     s->filament_ready_after_ms = 3500u;   /* gerçek flaman 4 s'den kısa sürede hazır */
     s->rise_tau_ms = 1.0f;   /* yüksek frekanslı jeneratör: ~1 ms yükselme */
 }
@@ -56,6 +57,7 @@ void sim_run(sim_t *s, exposure_sm_t *sm, uint32_t ms)
             .detector_ready = s->detector_ready,
             .detector_enable = s->detector_enable,
             .detector_error = s->detector_error,
+            .pc_link_ok = s->pc_link_ok,
             .xray_line_fb = ((s->last_out.xray_on && s->last_out.rl5_series) || s->xray_line_short)
                             && !s->xray_line_open,
             .preheat_line_fb = s->last_out.preheat,

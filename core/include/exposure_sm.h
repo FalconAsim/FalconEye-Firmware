@@ -51,6 +51,9 @@ typedef enum {
     END_TIME_DEV,         /* ölçülen ışınlama süresi ayarlanan süreden sapıyor */
     END_DETECTOR_WINDOW,  /* senkron dedektör ışınlama penceresini süre dolmadan kapattı */
     END_DETECTOR_ERROR,   /* dedektör hata sinyali */
+    END_LINK_DOWN,        /* PC modu: yazılım bağlantısı yok, hazırlık başlamaz / iptal (E701) */
+    END_LINK_LOST,        /* PC modu: ışınlamada TGP bağlantısı koptu, ışınlama kesildi (E702) */
+    END_LINK_LOST_SERIAL, /* PC modu: ışınlamada RS-232 (Current) bağlantısı koptu (E703) */
     END__COUNT
 } end_reason_t;
 
@@ -75,6 +78,7 @@ typedef struct {
     bool detector_error;  /* senkron: dedektör hata sinyali */
     bool xray_line_fb;    /* geri okuma: J2 X-RAY ON hattı GND'ye çekilmiş (aktif) */
     bool preheat_line_fb; /* geri okuma: J2 PreHeat hattı aktif */
+    bool pc_link_ok;      /* PC modu: seçili yazılım bağlantısı canlı (TGP veya Current) */
     float kv_fb;          /* ölçülen kV */
     float ma_fb;          /* ölçülen mA */
 } sm_inputs_t;
@@ -103,6 +107,8 @@ typedef struct {
     bool wait_detector_enable;     /* senkron profil: ışınlamadan önce dedektör izni beklenir */
     bool fluoro_enabled;           /* floroskopi opsiyonu bu cihazda açık */
     float gen_power_max_w;         /* 0 = varsayılan (FE_GEN_POWER_MAX_W) */
+    bool pc_link_required;         /* PC kontrol modu: bağlantı zorunlu, koparsa ışınlama kesilir */
+    bool pc_link_serial;           /* PC bağlantısı RS-232 (Current); false = TGP */
 } sm_config_t;
 
 /* Son ışınlamanın kaydı (DR yazılımına ve kayıt defterine gider) */
@@ -114,6 +120,7 @@ typedef struct {
     float kv_avg;
     float ma_avg;
     end_reason_t reason;
+    bool cut;              /* ışınlama bağlantı kopması nedeniyle kesildi */
     bool valid;
 } exposure_record_t;
 
@@ -122,7 +129,9 @@ typedef struct {
     sm_config_t cfg;
     exposure_params_t params;
     tube_state_t tube;
-    uint32_t t_state_ms;       /* mevcut durumdaki süre */
+    uint32_t t_state_ms;       /* mevcut durumdaki süre (hazırlıkta ısınma zamanlayıcısı) */
+    uint32_t prep_total_ms;    /* 1. kademenin toplam basılı tutulma süresi (ısınma yeniden başlasa da) */
+    uint32_t warmup_count;     /* servis sayacı: filaman ısınma sayısı (yeniden başlamalar dahil) */
     uint32_t t_expose_ms;      /* X-RAY ON'dan beri süre */
     uint32_t tol_kv_ms, tol_ma_ms;
     uint32_t rl5_hold_ms;      /* bitişte RL5'in geç açılması */
@@ -151,8 +160,24 @@ typedef struct {
 
 void sm_init(exposure_sm_t *sm, const sm_config_t *cfg);
 
-/* Ekrandan veya DR yazılımından gelen ayar. Işınlama sırasında reddedilir. */
-bool sm_set_params(exposure_sm_t *sm, const exposure_params_t *p);
+/* Ekrandan veya DR yazılımından gelen ayar (arayüz tanımı rev. 0.4 §4):
+ *  - BEKLE / KİLİT / HATA: serbest
+ *  - HAZIRLIK / HAZIR: kV, mA, süre kabul edilir; değer değiştiyse filaman
+ *    ısınması BAŞTAN başlar (hazır lambası söner). Fokus veya mod değişmez.
+ *  - IŞINLAMA: reddedilir */
+typedef enum {
+    SM_SET_OK = 0,
+    SM_SET_BUSY,             /* ışınlama sürüyor */
+    SM_SET_FOCUS_LOCKED,     /* hazırlıkta fokus / mod değiştirilemez (E213) */
+    SM_SET_FLUORO_DISABLED   /* floroskopi opsiyonu kapalı */
+} sm_set_result_t;
+
+sm_set_result_t sm_set_params_ex(exposure_sm_t *sm, const exposure_params_t *p);
+bool sm_set_params(exposure_sm_t *sm, const exposure_params_t *p);   /* = ..._ex == SM_SET_OK */
+
+/* PC / Manuel kontrol modu (panelden, yalnız BEKLE veya KİLİT durumunda).
+ * required = PC modu; serial = PC bağlantısı RS-232 (Current). */
+bool sm_set_pc_link(exposure_sm_t *sm, bool required, bool serial);
 
 /* Her 1 ms'de çağrılır */
 void sm_step(exposure_sm_t *sm, const sm_inputs_t *raw, sm_outputs_t *out, uint32_t dt_ms);
