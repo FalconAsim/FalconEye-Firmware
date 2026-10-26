@@ -1,0 +1,65 @@
+/*
+ * Tüp koruması: yük eğrisi, anot ısı modeli, görev döngüsü.
+ * Tüp: Canon DF-161SBR (sabit anot, 1.6 / 0.5 fokus).
+ */
+#ifndef TUBE_H
+#define TUBE_H
+
+#include <stdbool.h>
+#include <stdint.h>
+
+typedef enum { FOCUS_LARGE = 0, FOCUS_SMALL = 1 } focus_t;
+typedef enum { MODE_RADIOGRAPHY = 0, MODE_FLUORO = 1 } exp_mode_t;
+
+typedef struct {
+    float kv;          /* tüp gerilimi, kV */
+    float ma;          /* tüp akımı, mA */
+    uint32_t time_ms;  /* ışınlama süresi */
+    focus_t focus;
+    exp_mode_t mode;
+} exposure_params_t;
+
+/* Kontrol sonucu: OK değilse ekranda neden gösterilir */
+typedef enum {
+    TUBE_OK = 0,
+    TUBE_ERR_KV_LOW,          /* tüp alt sınırı 40 kV */
+    TUBE_ERR_KV_HIGH,         /* tüp veya jeneratör üst sınırı */
+    TUBE_ERR_MA_FOCUS_MAX,    /* fokusun mutlak akım sınırı */
+    TUBE_ERR_RATING,          /* yük eğrisi aşılıyor */
+    TUBE_ERR_TIME_MAX,        /* radyografi 10 s / floroskopi 20 s */
+    TUBE_ERR_GEN_POWER,       /* jeneratör gücü */
+    TUBE_ERR_HEAT,            /* anot ısı kapasitesi */
+    TUBE_ERR_COOLDOWN,        /* görev döngüsü beklemesi sürüyor */
+    TUBE_ERR_FLUORO_FOCUS,    /* floroskopi yalnızca küçük fokus */
+    TUBE_ERR_FLUORO_KV,       /* floroskopi 40-60 kV */
+    TUBE_ERR_FLUORO_POWER,    /* floroskopi en fazla 600 W */
+    TUBE_ERR_PARAM            /* geçersiz parametre */
+} tube_result_t;
+
+typedef struct {
+    float heat_j;            /* anottaki ısı (J) */
+    uint32_t cooldown_ms;    /* görev döngüsünden kalan bekleme */
+    float gen_power_max_w;   /* jeneratör gücü sınırı (servis ayarı; varsayılan FE_GEN_POWER_MAX_W) */
+} tube_state_t;
+
+void tube_init(tube_state_t *st);
+
+/* Verilen fokus ve kV için, verilen sürede izin verilen en yüksek mA
+ * (yük eğrisi, güvenlik payı uygulanmış). */
+float tube_rating_ma_max(focus_t focus, float kv, uint32_t time_ms);
+
+/* Işınlamadan önce tam kontrol. */
+tube_result_t tube_check(const tube_state_t *st, const exposure_params_t *p);
+
+/* Isı modeli: her tick'te çağrılır. power_w = o anki anot gücü (kV*mA). */
+void tube_tick(tube_state_t *st, float power_w, uint32_t dt_ms);
+
+/* Işınlama bittiğinde: görev döngüsü beklemesini başlatır. */
+void tube_exposure_done(tube_state_t *st, focus_t focus, uint32_t actual_ms);
+
+/* Ekranda gösterilecek doluluk (0..1) */
+float tube_heat_fraction(const tube_state_t *st);
+
+const char *tube_result_text(tube_result_t r);
+
+#endif
