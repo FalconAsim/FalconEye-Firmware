@@ -1,4 +1,4 @@
-/* Teknogem jeneratör protokolü (TGP v1, arayüz tanımı rev. 0.4) testleri */
+/* Teknogem jeneratör protokolü (TGP v1, arayüz tanımı rev. 0.5) testleri */
 #include "check.h"
 #include "hal_sim.h"
 #include "proto.h"
@@ -82,6 +82,10 @@ TEST(crc_test_vektorleri)
     CHECK(tgp_crc16(v, strlen(v)) == 0xCE47, "SET ornegi *CE47");
     const char *v2 = "0104 NAK 0013 E203";
     CHECK(tgp_crc16(v2, strlen(v2)) == 0xA7BC, "NAK ornegi *A7BC");
+    const char *v3 = "0101 VERSION FW=0.9.0 HW=A TGP=1 IF=0.5 TUBE=DF-161SBR CTRL=PC LINK=TGP SN=FE0001 OPT=FLUORO+DAP";
+    CHECK(tgp_crc16(v3, strlen(v3)) == 0x311C, "VERSION ornegi *311C");
+    const char *v4 = "0107 DOSE XN=152 DAP=1.234 SRC=METER";
+    CHECK(tgp_crc16(v4, strlen(v4)) == 0x7681, "DOSE ornegi *7681");
 }
 
 TEST(temel_komutlar)
@@ -91,7 +95,7 @@ TEST(temel_komutlar)
     CHECK(valid_lines(a) == 1 && line_has(a, 0, "PONG 0001"), "PING -> PONG <seq>");
     a = cmd("HELLO");
     CHECK(valid_lines(a) == 2 && line_has(a, 0, "ACK 0002"), "HELLO -> ACK");
-    CHECK(line_has(a, 1, "VERSION FW=0.9.0 HW=A TGP=1 IF=0.4 TUBE=DF-161SBR CTRL=PC LINK=TGP"),
+    CHECK(line_has(a, 1, "VERSION FW=0.9.0 HW=A TGP=1 IF=0.5 TUBE=DF-161SBR CTRL=PC LINK=TGP"),
           "HELLO -> VERSION satiri");
     a = cmd("FOO");
     CHECK(valid_lines(a) == 1 && line_has(a, 0, "NAK 0003 E904"), "bilinmeyen komut E904");
@@ -153,8 +157,43 @@ TEST(ayar_reddi)
     sm.cfg.fluoro_enabled = true;
     CHECK(line_has(cmd("SET KV=50.0 MA=10 MS=10000 FO=S"), 0, "ACK"), "floroskopi degerleri");
     const char *a = cmd("MODE M=FLUORO");
-    CHECK(line_has(a, 0, "ACK") && line_has(a, 1, "ACTUAL KV=50.0 MA=10 MS=10000 MAS=100.00 FO=S MODE=FLUORO"),
-          "floroskopi acikken MODE kabul");
+    CHECK(line_has(a, 0, "ACK") && line_has(a, 1, "ACTUAL KV=50.0 MA=2 MS=20000 MAS=40.00 FO=S MODE=FLUORO"),
+          "floroskopi acikken MODE kabul; ilk geciste floroskopi baslangic degerleri");
+    CHECK(line_has(cmd("SET KV=55.0 MA=3"), 0, "ACK"), "floroskopide deger degisimi");
+    a = cmd("MODE M=RAD");
+    CHECK(line_has(a, 1, "ACTUAL KV=50.0 MA=10 MS=10000 MAS=100.00 FO=S MODE=RAD"), "RAD'a donus: radyografi degerleri geri geldi");
+    a = cmd("MODE M=FLUORO");
+    CHECK(line_has(a, 1, "ACTUAL KV=55.0 MA=3 MS=20000 MAS=60.00 FO=S MODE=FLUORO"), "floroskopi son degerleri hatirlandi");
+}
+
+TEST(opsiyonlar_ve_doz)
+{
+    setup();
+    CHECK(strstr(cmd("VERSION?"), " OPT=NONE*") != NULL, "opsiyon yok: OPT=NONE");
+    sm.cfg.fluoro_enabled = true;
+    CHECK(strstr(cmd("VERSION?"), " OPT=FLUORO*") != NULL, "OPT=FLUORO");
+    sm.cfg.dap_meter_enabled = true;
+    CHECK(strstr(cmd("VERSION?"), " OPT=FLUORO+DAP*") != NULL, "OPT=FLUORO+DAP");
+    tube_select(&sm.tube, TUBE_INSERT_D067SB);
+    CHECK(strstr(cmd("VERSION?"), " OPT=DAP*") != NULL, "tek fokuslu insertte floroskopi kullanilamaz");
+    CHECK(line_has(cmd("MODE M=FLUORO"), 0, "NAK 0005 E906"), "tek fokuslu insertte MODE FLUORO -> E906");
+    tube_select(&sm.tube, TUBE_INSERT_DF161SBR);
+
+    /* DAP: DONE'dan sonra DOSE satırı, yalnız metre açık ve okuma geldiyse */
+    char out[TGP_REPLY_MAX];
+    sm.last_record.valid = true;
+    sm.last_record.dap_valid = false;
+    CHECK(tgp_fmt_dose(&c, &sm.last_record, out, sizeof out) == 0, "okuma yok: DOSE yok");
+    CHECK(sm_record_dap(&sm, 12.345f), "DAP kaydedildi");
+    c.xn = 7;
+    CHECK(tgp_fmt_dose(&c, &sm.last_record, out, sizeof out) > 0 && valid_lines(out) == 1 &&
+          line_has(out, 0, "DOSE XN=7 DAP=12.345 SRC=METER"), "DOSE satiri");
+    const char *a = cmd("LAST?");
+    CHECK(valid_lines(a) == 2 && line_has(a, 0, "STATE ST=DONE") && line_has(a, 1, "DOSE XN=7 DAP=12.345"), "LAST? DONE + DOSE");
+    sm.cfg.dap_meter_enabled = false;
+    CHECK(!sm_record_dap(&sm, 1.0f), "metre kapali: DAP kayda yazilmaz");
+    CHECK(tgp_fmt_dose(&c, &sm.last_record, out, sizeof out) == 0, "metre kapali (veteriner): DOSE gonderilmez");
+    CHECK(valid_lines(cmd("LAST?")) == 1, "LAST? yalniz DONE");
 }
 
 TEST(pc_manuel_modu)
@@ -352,7 +391,7 @@ TEST(uzun_satir)
 
 int main(void)
 {
-    printf("TGP v1 (rev. 0.4) protokol testleri\n");
+    printf("TGP v1 (rev. 0.5) protokol testleri\n");
     RUN(acilis_degerleri);
     RUN(crc_test_vektorleri);
     RUN(temel_komutlar);
@@ -360,6 +399,7 @@ int main(void)
     RUN(ayar_gonderme);
     RUN(mas_teknigi);
     RUN(ayar_reddi);
+    RUN(opsiyonlar_ve_doz);
     RUN(pc_manuel_modu);
     RUN(isinlama_sirasinda_ayar_degismez);
     RUN(hazirlikta_set);

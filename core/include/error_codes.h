@@ -50,6 +50,7 @@ const fe_error_t *fe_error_by_code(uint16_t code);
 /* Uyarılar */
 const fe_error_t *fe_warning_fluoro_cumulative(void);
 const fe_error_t *fe_warning_no_calibration(void);   /* W602: nv_load varsayılan döndüyse */
+const fe_error_t *fe_warning_dap_meter(void);        /* W603: DAP metre açık ama okuma yok */
 
 /* Tüm tablo (kılavuz üretimi ve testler için) */
 const fe_error_t *fe_error_table(uint32_t *count);

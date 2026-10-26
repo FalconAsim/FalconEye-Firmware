@@ -170,8 +170,12 @@ bool tube_select(tube_state_t *st, tube_insert_t id)
 {
     if (id >= TUBE_INSERT_COUNT) return false;
     st->insert = id;
-    st->heat_j = 0.0f;          /* yeni insert: ısı modeli baştan (servis işlemi) */
-    st->cooldown_ms = 0u;
+    /* Isı modeli ve görev döngüsü beklemesi SIFIRLANMAZ: servis menüsünden
+     * insert değiştirmek sıcak tüpün ısı kaydını silmenin yolu olmamalı.
+     * Yeni insert gerçekte soğuktur; tahmin yüksek kalır (güvenli taraf) ve
+     * normal soğuma ile düşer. Yeni kapasiteyi aşan ısı kapasiteye kırpılır. */
+    const float cap = prof(st)->heat_capacity_j;
+    if (st->heat_j > cap) st->heat_j = cap;
     return true;
 }
 

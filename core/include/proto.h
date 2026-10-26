@@ -26,7 +26,7 @@
 #include "exposure_sm.h"
 
 #define TGP_VERSION        1
-#define TGP_IF_REV         "0.4"
+#define TGP_IF_REV         "0.5"
 #define TGP_LINE_MAX     128          /* \r\n dahil */
 #define TGP_REPLY_MAX    512          /* bir cevapta birden fazla satır olabilir */
 #define TGP_TIMEOUT_MS           3000u   /* boşta / hazırlıkta canlılık eşiği */
@@ -86,6 +86,10 @@ bool tgp_writes_allowed(const tgp_ctx_t *c);
 size_t tgp_fmt_actual(tgp_ctx_t *c, char *out, size_t max);
 size_t tgp_fmt_state(tgp_ctx_t *c, char *out, size_t max);
 size_t tgp_fmt_done(tgp_ctx_t *c, const exposure_record_t *r, char *out, size_t max);
+/* DOSE XN=<n> DAP=<dGy·cm²> SRC=METER – yalnız DAP metre açık ve okuma
+ * geldiyse (r->dap_valid); aksi halde 0 bayt. DONE'dan sonra gönderilir,
+ * XN son DONE'unkidir. DOSE gelmezse DAP'ı FalconXray hesaplar. */
+size_t tgp_fmt_dose(tgp_ctx_t *c, const exposure_record_t *r, char *out, size_t max);
 size_t tgp_fmt_error(tgp_ctx_t *c, char prefix, uint16_t code, bool cleared, char *out, size_t max);
 size_t tgp_fmt_limits(tgp_ctx_t *c, char *out, size_t max);
 

@@ -110,7 +110,8 @@ typedef struct {
     bool pedal_dual_channel;       /* pedal iki kanallı */
     bool line_readback;            /* J2 hat geri okuması takılı */
     bool wait_detector_enable;     /* senkron profil: ışınlamadan önce dedektör izni beklenir */
-    bool fluoro_enabled;           /* floroskopi opsiyonu bu cihazda açık */
+    bool fluoro_enabled;           /* floroskopi opsiyonu bu cihazda açık (servis menüsü) */
+    bool dap_meter_enabled;        /* DAP metre takılı (servis menüsü); kapalıysa DAP'ı FalconXray hesaplar */
     float gen_power_max_w;         /* 0 = varsayılan (FE_GEN_POWER_MAX_W) */
     bool pc_link_required;         /* PC kontrol modu: bağlantı zorunlu, koparsa ışınlama kesilir */
     bool pc_link_serial;           /* PC bağlantısı RS-232 (Current); false = TGP */
@@ -128,6 +129,8 @@ typedef struct {
     float ma_avg;
     end_reason_t reason;
     bool cut;              /* ışınlama bağlantı kopması nedeniyle kesildi */
+    bool dap_valid;        /* DAP metreden okundu (sm_record_dap) */
+    float dap_dgycm2;      /* doz-alan çarpımı, dGy·cm² (DICOM 0018,115E birimi) */
     bool valid;
 } exposure_record_t;
 
@@ -135,6 +138,9 @@ typedef struct {
     sm_state_t state;
     sm_config_t cfg;
     exposure_params_t params;
+    exposure_params_t saved_rad;     /* tek tuşla mod geçişinde her modun son değerleri */
+    exposure_params_t saved_fluoro;
+    bool have_saved_fluoro;
     tube_state_t tube;
     uint32_t t_state_ms;       /* mevcut durumdaki süre (hazırlıkta ısınma zamanlayıcısı) */
     uint32_t prep_total_ms;    /* 1. kademenin toplam basılı tutulma süresi (ısınma yeniden başlasa da) */
@@ -190,6 +196,22 @@ typedef enum {
 
 sm_set_result_t sm_set_params_ex(exposure_sm_t *sm, const exposure_params_t *p);
 bool sm_set_params(exposure_sm_t *sm, const exposure_params_t *p);   /* = ..._ex == SM_SET_OK */
+
+/* Floroskopi bu cihazda kullanılabilir mi: servis opsiyonu açık VE kurulu
+ * insert floroskopiye uygun (çift fokuslu). */
+bool sm_fluoro_available(const exposure_sm_t *sm);
+
+/* Tek tuşla RAD <-> FLUORO geçişi (Asım, 26.10.2026). Her mod kendi son
+ * değerlerini hatırlar; floroskopiye ilk geçişte küçük fokus, 50 kV, 2 mA,
+ * 20 s. Kurallar sm_set_params_ex ile aynı: hazırlıkta mod değişmez (E213),
+ * opsiyon kapalıysa SM_SET_FLUORO_DISABLED. */
+void sm_mode_target(const exposure_sm_t *sm, exp_mode_t mode, exposure_params_t *out);
+sm_set_result_t sm_select_mode(exposure_sm_t *sm, exp_mode_t mode);
+sm_set_result_t sm_toggle_mode(exposure_sm_t *sm);
+
+/* DAP metre okuması (HAL, ışınlama bittikten sonra metre entegrasyonunu
+ * tamamlayınca). Yalnız dap_meter_enabled iken kayda yazılır. */
+bool sm_record_dap(exposure_sm_t *sm, float dgycm2);
 
 /* PC / Manuel kontrol modu (panelden, yalnız BEKLE veya KİLİT durumunda).
  * required = PC modu; serial = PC bağlantısı RS-232 (Current). */

@@ -48,6 +48,8 @@ void sm_load_boot_defaults(exposure_sm_t *sm)
     sm->params.time_ms = 100u;
     sm->params.focus = small ? FOCUS_SMALL : FOCUS_LARGE;
     sm->params.mode = MODE_RADIOGRAPHY;
+    sm->saved_rad = sm->params;
+    sm->have_saved_fluoro = false;
     /* Röle bırakık = büyük fokus; küçük fokus komutu ilk adımda verilir ve
      * 50 ms oturma süresi beklenir. */
     sm->focus_cmd_small = false;
@@ -59,7 +61,7 @@ sm_set_result_t sm_set_params_ex(exposure_sm_t *sm, const exposure_params_t *p)
     if (sm->state == ST_EXPOSING) {
         return SM_SET_BUSY;   /* ışınlamada değerler donar */
     }
-    if (p->mode == MODE_FLUORO && !sm->cfg.fluoro_enabled) {
+    if (p->mode == MODE_FLUORO && !sm_fluoro_available(sm)) {
         return SM_SET_FLUORO_DISABLED;
     }
     if (sm->state == ST_PREP || sm->state == ST_READY) {
@@ -86,6 +88,62 @@ sm_set_result_t sm_set_params_ex(exposure_sm_t *sm, const exposure_params_t *p)
 bool sm_set_params(exposure_sm_t *sm, const exposure_params_t *p)
 {
     return sm_set_params_ex(sm, p) == SM_SET_OK;
+}
+
+bool sm_fluoro_available(const exposure_sm_t *sm)
+{
+    return sm->cfg.fluoro_enabled && tube_has_fluoro(&sm->tube);
+}
+
+void sm_mode_target(const exposure_sm_t *sm, exp_mode_t mode, exposure_params_t *out)
+{
+    if (mode == sm->params.mode) {
+        *out = sm->params;
+    } else if (mode == MODE_FLUORO) {
+        if (sm->have_saved_fluoro) {
+            *out = sm->saved_fluoro;
+        } else {
+            out->kv = 50.0f;
+            out->ma = 2.0f;
+            out->time_ms = FE_FLUORO_TIME_MAX_MS;
+            out->focus = FOCUS_SMALL;
+            out->mode = MODE_FLUORO;
+        }
+    } else {
+        *out = sm->saved_rad;
+        out->mode = MODE_RADIOGRAPHY;
+    }
+}
+
+sm_set_result_t sm_select_mode(exposure_sm_t *sm, exp_mode_t mode)
+{
+    if (mode == sm->params.mode) return SM_SET_OK;
+    exposure_params_t p;
+    sm_mode_target(sm, mode, &p);
+    const exposure_params_t before = sm->params;
+    const sm_set_result_t r = sm_set_params_ex(sm, &p);
+    if (r == SM_SET_OK) {
+        if (before.mode == MODE_FLUORO) {
+            sm->saved_fluoro = before;
+            sm->have_saved_fluoro = true;
+        } else {
+            sm->saved_rad = before;
+        }
+    }
+    return r;
+}
+
+sm_set_result_t sm_toggle_mode(exposure_sm_t *sm)
+{
+    return sm_select_mode(sm, sm->params.mode == MODE_FLUORO ? MODE_RADIOGRAPHY : MODE_FLUORO);
+}
+
+bool sm_record_dap(exposure_sm_t *sm, float dgycm2)
+{
+    if (!sm->cfg.dap_meter_enabled || !sm->last_record.valid || !(dgycm2 >= 0.0f)) return false;
+    sm->last_record.dap_dgycm2 = dgycm2;
+    sm->last_record.dap_valid = true;
+    return true;
 }
 
 bool sm_set_pc_link(exposure_sm_t *sm, bool required, bool serial)
@@ -129,6 +187,8 @@ static void finish_exposure(exposure_sm_t *sm, end_reason_t reason)
     r->ma_avg = sm->n_samples ? sm->ma_sum / (float)sm->n_samples : 0.0f;
     r->reason = reason;
     r->cut = reason == END_LINK_LOST || reason == END_LINK_LOST_SERIAL;
+    r->dap_valid = false;      /* DAP metre okuması sonra gelir (sm_record_dap) */
+    r->dap_dgycm2 = 0.0f;
     r->valid = true;
 
     if (sm->t_expose_ms > 0u) {
