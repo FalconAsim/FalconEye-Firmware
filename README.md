@@ -19,11 +19,12 @@ doğrulanır.
 | `core/src/detector.c` | Dedektör profilleri (kapalı/CR, AED, senkron) ve J19 eşlemesi |
 | `core/src/hs_line.c` | Dirençle denetlenen el butonu hattı (2 telli kademe) |
 | `core/src/proto.c` | Teknogem jeneratör protokolü TGP v1 (Ethernet ve RS-232) |
+| `core/src/service.c` | Servis menüsü: floroskopi ve DAP metre opsiyonu, kurulu insert, PIN |
 | `backup/backup_timer.c` | Yedek zamanlayıcı (ayrı STM32G031 firmware'inin mantığı) |
 | `docs/generator_protocol_EN.md` | Protokol dokümanı (DR yazılımı üreticileri için, İngilizce) |
 | `tools/gen_error_table.c` | Kılavuzun hata kodu tablosunu firmware'den üretir |
 | `sim/` | PC simülatörü: jeneratör, flaman ve operatörü taklit eder |
-| `tests/` | 8 test programı, 1.000'den fazla kontrol |
+| `tests/` | 9 test programı, 1.600'den fazla kontrol |
 | `cmake/arm-none-eabi.cmake` | STM32 için çapraz derleme ayarı |
 
 ## Durum makinesi
@@ -162,3 +163,12 @@ Kurulu insert servis menüsünden seçilir (`tube_select`); `LIMITS?` ve `VERSIO
 ## Kalibrasyon yok uyarısı
 
 - `nv_load` varsayılan döndüyse ekranda **W602** (`fe_warning_no_calibration`).
+
+## Servis menüsü ve opsiyonlar (Asım, 26.10.2026; arayüz tanımı rev. 0.5 §10)
+
+- **Floroskopi** (bir sonraki dedektörle; opsiyon): sistemde hazır, servis menüsünden açılır/kapanır (`svc_set_fluoro`). Açıkken panelde **tek tuşla** RAD ↔ FLUORO (`sm_toggle_mode`); her mod kendi son değerlerini hatırlar, floroskopiye ilk geçiş küçük fokus, 50 kV, 2 mA, 20 s. Tek fokuslu insertte (D-067SB, D-023, OX/105-4) opsiyon açık olsa da floroskopi kullanılamaz. Kapatılırken floroskopideyse radyografiye döner.
+- **DAP metre**: servis menüsünden açılır/kapanır (`svc_set_dap_meter`). Açıkken HAL metre okumasını `sm_record_dap` ile kayda yazar, kart `DONE`'dan sonra `DOSE` satırı gönderir; okuma gelmezse **W603**. **Veteriner versiyonunda kapalı**: kart DAP göndermez, DAP'ı FalconXray hesaplar. Metre arayüzü (muhtemelen J14 RS-485) seçilecek.
+- **Insert seçimi**: servis menüsünden (`svc_set_insert`); açılış değerleri yeni insertin sınırlarına göre yüklenir. **Isı modeli sıfırlanmaz**: insert değiştirmek sıcak tüpün ısı kaydını silmenin yolu olmasın.
+- Servis moduna yalnız panelden PIN ile girilir (TGP'den girilemez); 3 yanlış PIN → 60 s kilit; 10 dk işlemsiz kalırsa kapanır. Ayar yalnız hazırlık / ışınlama dışında değişir; FRAM'e yazılıp geri okunur, yazılamazsa geri alınır.
+- FRAM kayıt sürümü 2 (insert, DAP metre). Sürüm 1 (v0.8) kaydı kalibrasyon korunarak okunur ve dönüştürülür.
+- Açık: servis PIN'inin kaynağı (cihaza özel, seri numarasından türetme önerilir).

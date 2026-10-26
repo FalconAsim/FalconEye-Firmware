@@ -150,6 +150,9 @@ static const fe_error_t table[] = {
     { 602, 'W', SEV_WARNING, "Kalibrasyon yok",
       "Kalıcı bellekte geçerli kV / mA kalibrasyonu bulunamadı; cihaz nominal ölçekle çalışıyor.",
       "Servis kalibrasyonu yaptırın. Kalibrasyon yapılana kadar kV ve mA değerleri tolerans dışında olabilir." },
+    { 603, 'W', SEV_WARNING, "DAP metre okunamadı",
+      "DAP metre servis menüsünde açık ama çekimden sonra okuma gelmedi; bu çekimin DAP değeri yazılımın hesabıdır.",
+      "DAP metre kablosunu ve beslemesini kontrol edin. Sürerse servisi arayın." },
 };
 
 #define N_ERR (sizeof(table) / sizeof(table[0]))
@@ -226,6 +229,7 @@ const fe_error_t *fe_warning_fluoro_cumulative(void) { return by_code(601); }
 const fe_error_t *fe_error_by_code(uint16_t code) { return by_code(code); }
 
 const fe_error_t *fe_warning_no_calibration(void) { return by_code(602); }
+const fe_error_t *fe_warning_dap_meter(void) { return by_code(603); }
 
 const fe_error_t *fe_error_table(uint32_t *count)
 {

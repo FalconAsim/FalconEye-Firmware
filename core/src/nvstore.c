@@ -15,6 +15,15 @@ typedef struct {
     uint32_t crc;      /* başlık + veri üzerinden */
 } nv_record_t;
 
+/* Sürüm 1 düzeni (firmware v0.8) – yalnız okuma ve dönüştürme için */
+typedef struct {
+    float gen_power_max_w;
+    uint8_t language, detector_profile, fluoro_enabled, pc_required;
+    uint32_t exposure_count;
+} nv_settings_v1_t;
+typedef struct { calib_t calib; nv_settings_v1_t settings; } nv_data_v1_t;
+typedef struct { nv_header_t h; nv_data_v1_t d; uint32_t crc; } nv_record_v1_t;
+
 _Static_assert(sizeof(nv_record_t) <= NV_SLOT_SIZE, "kayit bir slota sigmali");
 
 uint32_t nv_crc32(const void *data, size_t len)
@@ -39,6 +48,8 @@ void nv_defaults(nv_data_t *d)
     d->settings.detector_profile = DET_PROFILE_AED;
     d->settings.fluoro_enabled = 0;
     d->settings.pc_required = 0;
+    d->settings.tube_insert = 0;          /* TUBE_INSERT_DF161SBR */
+    d->settings.dap_meter_enabled = 0;    /* varsayılan: DAP'ı yazılım hesaplar */
 }
 
 static uint32_t rec_crc(const nv_record_t *r)
@@ -46,9 +57,31 @@ static uint32_t rec_crc(const nv_record_t *r)
     return nv_crc32(r, offsetof(nv_record_t, crc));
 }
 
+/* Sürüm 1 kaydını sürüm 2'ye çevirir; yeni alanlar varsayılan değer alır.
+ * Kalibrasyon korunur. Bir sonraki nv_save sürüm 2 yazar. */
+static bool read_slot_v1(const nv_ops_t *ops, uint32_t addr, nv_record_t *r)
+{
+    static nv_record_v1_t o;
+    if (!ops->read(addr, &o, sizeof o)) return false;
+    if (o.h.magic != NV_MAGIC || o.h.version != 1u || o.h.length != sizeof(nv_data_v1_t)) return false;
+    if (nv_crc32(&o, offsetof(nv_record_v1_t, crc)) != o.crc) return false;
+    if (!calib_valid(&o.d.calib)) return false;
+    nv_defaults(&r->d);
+    r->h = o.h;
+    r->d.calib = o.d.calib;
+    r->d.settings.gen_power_max_w = o.d.settings.gen_power_max_w;
+    r->d.settings.language = o.d.settings.language;
+    r->d.settings.detector_profile = o.d.settings.detector_profile;
+    r->d.settings.fluoro_enabled = o.d.settings.fluoro_enabled;
+    r->d.settings.pc_required = o.d.settings.pc_required;
+    r->d.settings.exposure_count = o.d.settings.exposure_count;
+    return true;
+}
+
 static bool read_slot(const nv_ops_t *ops, uint32_t addr, nv_record_t *r)
 {
     if (!ops->read(addr, r, sizeof(*r))) return false;
+    if (r->h.magic == NV_MAGIC && r->h.version == 1u) return read_slot_v1(ops, addr, r);
     if (r->h.magic != NV_MAGIC || r->h.version != NV_VERSION) return false;
     if (r->h.length != sizeof(nv_data_t)) return false;
     if (rec_crc(r) != r->crc) return false;

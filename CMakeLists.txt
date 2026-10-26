@@ -21,6 +21,7 @@ add_library(fe_core STATIC
   core/src/detector.c
   core/src/proto.c
   core/src/hs_line.c
+  core/src/service.c
 )
 target_include_directories(fe_core PUBLIC core/include)
 if(NOT CMAKE_CROSSCOMPILING)
@@ -60,6 +61,10 @@ if(NOT CMAKE_CROSSCOMPILING)
   add_executable(test_proto tests/test_proto.c)
   target_link_libraries(test_proto fe_sim)
   add_test(NAME jenerator_protokolu COMMAND test_proto)
+
+  add_executable(test_service tests/test_service.c)
+  target_link_libraries(test_service fe_sim)
+  add_test(NAME servis_menusu COMMAND test_service)
 
   add_executable(test_hs_line tests/test_hs_line.c)
   target_link_libraries(test_hs_line fe_sim)

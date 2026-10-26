@@ -38,7 +38,8 @@ static void w_uint_pad(wbuf_t *w, uint32_t v, int width)
 static void w_fix(wbuf_t *w, float v, int dec)
 {
     if (!(v >= 0.0f)) v = 0.0f;
-    const uint32_t mul = dec == 2 ? 100u : dec == 1 ? 10u : 1u;
+    if (v > 999999.0f) v = 999999.0f;
+    const uint32_t mul = dec == 3 ? 1000u : dec == 2 ? 100u : dec == 1 ? 10u : 1u;
     const uint32_t x = (uint32_t)(v * (float)mul + 0.5f);
     w_uint(w, x / mul);
     if (dec > 0) {
@@ -247,6 +248,8 @@ static void line_version(tgp_ctx_t *c, out_t *o)
     w_str(&w, c->ctrl == TGP_CTRL_PC ? " CTRL=PC" : " CTRL=MANUAL");
     w_str(&w, c->link_sel == TGP_LINK_TGP ? " LINK=TGP" : " LINK=CURRENT");
     w_str(&w, " SN="); w_str(&w, c->serial);
+    const bool fl = sm_fluoro_available(c->sm), dap = c->sm->cfg.dap_meter_enabled;
+    w_str(&w, fl && dap ? " OPT=FLUORO+DAP" : fl ? " OPT=FLUORO" : dap ? " OPT=DAP" : " OPT=NONE");
     out_line(c, o, b);
 }
 
@@ -297,12 +300,23 @@ static void line_done(tgp_ctx_t *c, out_t *o, const exposure_record_t *r, uint32
     out_line(c, o, b);
 }
 
+static void line_dose(tgp_ctx_t *c, out_t *o, const exposure_record_t *r, uint32_t xn)
+{
+    if (!r->dap_valid || !c->sm->cfg.dap_meter_enabled) return;
+    char b[TGP_LINE_MAX];
+    wbuf_t w = { b, sizeof b };
+    w_str(&w, "DOSE XN="); w_uint(&w, xn);
+    w_str(&w, " DAP="); w_fix(&w, r->dap_dgycm2, 3);
+    w_str(&w, " SRC=METER");
+    out_line(c, o, b);
+}
+
 static void lines_limits(tgp_ctx_t *c, out_t *o)
 {
     struct { focus_t f; exp_mode_t m; bool on; } rows[3] = {
         { FOCUS_LARGE, MODE_RADIOGRAPHY, true },
         { FOCUS_SMALL, MODE_RADIOGRAPHY, tube_has_small_focus(&c->sm->tube) },
-        { FOCUS_SMALL, MODE_FLUORO, tube_has_fluoro(&c->sm->tube) && c->sm->cfg.fluoro_enabled },
+        { FOCUS_SMALL, MODE_FLUORO, sm_fluoro_available(c->sm) },
     };
     for (int i = 0; i < 3; i++) {
         if (!rows[i].on) continue;
@@ -386,11 +400,29 @@ static void cmd_set(tgp_ctx_t *c, out_t *o, int seq, const char *args, bool mode
     q.p = c->sm->params;
     const uint32_t perr = parse_set(args, mode_only, &q);
     if (perr) { line_nak(c, o, seq, 'E', perr); return; }
+    if (mode_only) {
+        /* Panelin tek tuşu ile aynı: her mod kendi son değerleriyle gelir */
+        if (q.p.mode == MODE_FLUORO && !sm_fluoro_available(c->sm)) {
+            line_nak(c, o, seq, 'E', TGP_ERR_DISABLED); return;
+        }
+        if ((c->sm->state == ST_PREP || c->sm->state == ST_READY) && q.p.mode != c->sm->params.mode) {
+            line_nak(c, o, seq, 'E', 213); return;
+        }
+        switch (sm_select_mode(c->sm, q.p.mode)) {
+        case SM_SET_OK:              break;
+        case SM_SET_BUSY:            line_nak(c, o, seq, 'E', TGP_ERR_BUSY); return;
+        case SM_SET_FOCUS_LOCKED:    line_nak(c, o, seq, 'E', 213); return;
+        case SM_SET_FLUORO_DISABLED: line_nak(c, o, seq, 'E', TGP_ERR_DISABLED); return;
+        }
+        line_ack(c, o, seq);
+        line_actual(c, o);
+        return;
+    }
 
     if (q.p.focus == FOCUS_SMALL && !tube_has_small_focus(&c->sm->tube)) {
         line_nak(c, o, seq, 'E', 214); return;   /* E214: bu tüpte küçük fokus yok */
     }
-    if (q.p.mode == MODE_FLUORO && !c->sm->cfg.fluoro_enabled) {
+    if (q.p.mode == MODE_FLUORO && !sm_fluoro_available(c->sm)) {
         line_nak(c, o, seq, 'E', TGP_ERR_DISABLED); return;
     }
     if ((c->sm->state == ST_PREP || c->sm->state == ST_READY) &&
@@ -498,7 +530,10 @@ size_t tgp_handle_line(tgp_ctx_t *c, const char *line, char *reply, size_t max)
         lines_limits(c, &o);
     } else if (tok_eq(cmd, cn, "LAST?")) {
         if (!c->sm->last_record.valid) line_nak(c, &o, seq, 'E', TGP_ERR_NODATA);
-        else line_done(c, &o, &c->sm->last_record, c->xn);
+        else {
+            line_done(c, &o, &c->sm->last_record, c->xn);
+            line_dose(c, &o, &c->sm->last_record, c->xn);
+        }
     } else if (tok_eq(cmd, cn, "SET")) {
         cmd_set(c, &o, seq, args, false);
     } else if (tok_eq(cmd, cn, "MODE")) {
@@ -544,6 +579,14 @@ size_t tgp_fmt_done(tgp_ctx_t *c, const exposure_record_t *r, char *out, size_t 
     out_t o = { out, max, 0 };
     c->xn++;
     line_done(c, &o, r, c->xn);
+    return o.len;
+}
+
+size_t tgp_fmt_dose(tgp_ctx_t *c, const exposure_record_t *r, char *out, size_t max)
+{
+    out_t o = { out, max, 0 };
+    if (max) out[0] = '\0';
+    line_dose(c, &o, r, c->xn);
     return o.len;
 }
 

@@ -1,5 +1,6 @@
 /* Kalibrasyon ve kalıcı saklama testleri */
 #include "check.h"
+#include <stddef.h>
 #include "calib.h"
 #include "nvstore.h"
 #include <math.h>
@@ -157,6 +158,33 @@ TEST(gecersiz_kalibrasyon_yazilmaz)
     CHECK(!nv_save(&nv, &d), "gecersiz tablo reddedildi");
 }
 
+/* Firmware v0.8 (kayıt sürümü 1) FRAM'i: kalibrasyon korunarak okunur */
+TEST(surum1_kaydi_donusturulur)
+{
+    typedef struct { float gp; uint8_t lang, det, fl, pc; uint32_t cnt; } s1_t;
+    typedef struct { uint32_t magic; uint16_t version, length; uint32_t seq; } h_t;
+    typedef struct { h_t h; struct { calib_t calib; s1_t st; } d; uint32_t crc; } r1_t;
+    memset(fram, 0xFF, sizeof fram);
+    static r1_t r;
+    memset(&r, 0, sizeof r);
+    r.h.magic = NV_MAGIC; r.h.version = 1u; r.h.length = (uint16_t)sizeof(r.d); r.h.seq = 5u;
+    calib_default(&r.d.calib);
+    r.d.calib.kv_to_v.y[1] *= 0.98f;               /* ayarlanmış kalibrasyon */
+    r.d.st.gp = 3000.0f; r.d.st.fl = 1u; r.d.st.cnt = 1234u; r.d.st.det = DET_PROFILE_SYNC;
+    r.crc = nv_crc32(&r, offsetof(r1_t, crc));
+    memcpy(fram + NV_SLOT_A_ADDR, &r, sizeof r);
+    nvstore_t nv; nv_data_t d;
+    CHECK(nv_load(&nv, &ops, &d) == NV_LOAD_ONE_BAD, "surum 1 kaydi okundu");
+    CHECK(d.calib.kv_to_v.y[1] == r.d.calib.kv_to_v.y[1], "kalibrasyon korundu");
+    CHECK(d.settings.gen_power_max_w == 3000.0f && d.settings.fluoro_enabled == 1u &&
+          d.settings.exposure_count == 1234u && d.settings.detector_profile == DET_PROFILE_SYNC, "eski ayarlar korundu");
+    CHECK(d.settings.tube_insert == 0u && d.settings.dap_meter_enabled == 0u, "yeni alanlar varsayilan");
+    CHECK(nv_save(&nv, &d), "surum 2 olarak kaydedildi");
+    nvstore_t nv2; nv_data_t e;
+    CHECK(nv_load(&nv2, &ops, &e) == NV_LOAD_OK && e.settings.exposure_count == 1234u && nv2.seq == 6u,
+          "iki kopya gecerli, sira numarasi devam");
+}
+
 int main(void)
 {
     printf("Kalibrasyon ve kalici saklama testleri\n");
@@ -170,5 +198,6 @@ int main(void)
     RUN(yazarken_guc_kesilmesi);
     RUN(bit_bozulmasi);
     RUN(gecersiz_kalibrasyon_yazilmaz);
+    RUN(surum1_kaydi_donusturulur);
     return REPORT();
 }

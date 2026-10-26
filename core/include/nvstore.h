@@ -19,7 +19,7 @@
 #include "calib.h"
 
 #define NV_MAGIC        0x4C434546u   /* "FECL" */
-#define NV_VERSION      1u
+#define NV_VERSION      2u   /* 2: insert ve DAP metre ayarı eklendi; 1 okunur ve dönüştürülür */
 #define NV_SLOT_SIZE    2048u
 #define NV_SLOT_A_ADDR  0x0000u
 #define NV_SLOT_B_ADDR  0x0800u
@@ -34,6 +34,10 @@ typedef struct {
     uint8_t fluoro_enabled;     /* floroskopi lisansı/opsiyonu */
     uint8_t pc_required;        /* DR bağlantısı yoksa çekime izin verme */
     uint32_t exposure_count;    /* toplam çekim sayacı */
+    /* --- sürüm 2 --- */
+    uint8_t tube_insert;        /* tube_insert_t: kurulu insert (servis menüsü) */
+    uint8_t dap_meter_enabled;  /* DAP metre takılı (insan versiyonu); veterinerde 0 */
+    uint8_t reserved[6];
 } nv_settings_t;
 
 typedef struct {

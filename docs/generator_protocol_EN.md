@@ -1,7 +1,7 @@
 # Teknogem Generator Protocol (TGP) – Version 1
 
 Interface between a DR console / acquisition software and the FalconEye X-ray
-control panel. Matches interface definition rev. 0.4 (FalconEye_Arayuz_Tanimi.md).
+control panel. Matches interface definition rev. 0.5 (FalconEye_Arayuz_Tanimi.md).
 Status: **draft, not released**.
 
 ## 1. Transport
@@ -43,9 +43,9 @@ These are properties of the protocol, not configuration options:
 |---|---|---|
 | `PING` | `PONG <seq>` | Heartbeat. Send every 1 s; every 250 ms while `ST=XRAY`. |
 | `HELLO` | `ACK <seq>` + `VERSION …` | |
-| `VERSION?` | `VERSION FW=… HW=… TGP=1 IF=0.4 TUBE=<insert> CTRL=PC\|MANUAL LINK=TGP\|CURRENT SN=…` | |
+| `VERSION?` | `VERSION FW=… HW=… TGP=1 IF=0.5 TUBE=<insert> CTRL=PC\|MANUAL LINK=TGP\|CURRENT SN=… OPT=NONE\|FLUORO\|DAP\|FLUORO+DAP` | `OPT` = options enabled in the panel's service menu. `FLUORO` only if the installed insert supports fluoroscopy. `DAP` = a DAP meter is fitted; without it the console calculates DAP itself. |
 | `SET [KV=] [MA=] [MS=\|MAS=] [FO=L\|S]` | `ACK <seq>` + `ACTUAL …` or `NAK <seq> <code>` | `MS` and `MAS` are mutually exclusive. `MAS` requires `MA` (the console chooses mA); the panel computes `MS = MAS × 1000 / MA`, rounded to 1 ms. |
-| `MODE M=RAD\|FLUORO` | `ACK` + `ACTUAL` / `NAK` | Fluoroscopy only if enabled on the unit (`E906`). |
+| `MODE M=RAD\|FLUORO` | `ACK` + `ACTUAL` / `NAK` | Same as the panel's single mode key: each mode restores its own last values (first switch to fluoroscopy: small focus, 50 kV, 2 mA, 20 s). Fluoroscopy only if `OPT` contains `FLUORO` (`E906`). Not during preparation (`E213`). |
 | `STATUS?` | `STATUS ST=… CTRL=… LINK=… MODE=… ERR=<code> HEAT=<%> COOL=<s> DET=0\|1` + `ACTUAL …` | |
 | `LIMITS?` | one `LIMITS …` line per focus and mode | §5.3 |
 | `LAST?` | `STATE ST=DONE …` (last exposure) or `NAK E902` | |
@@ -73,6 +73,9 @@ These values are intended for the DICOM header / dose report.
 ### 5.3 `LIMITS TUBE=<insert> MODE=RAD|FLUORO FO=L|S KV=<min>-<max> MA=1-<max> MS=1-<max> P=<W>`
 Sent on request, on connection, and when the insert or mode changes. `P` is the maximum power for that focus and mode, limited by the generator. Single-focus inserts report `FO=L` only. The console should clamp its presets to these ranges; the panel enforces them anyway.
 
+### 5.3a `DOSE XN=<n> DAP=<dGy·cm²> SRC=METER`
+Sent after `STATE ST=DONE` (same `XN`) only when a DAP meter is fitted (`OPT` contains `DAP`) and its reading arrived (up to ~1 s after the exposure). Unit dGy·cm² (DICOM 0018,115E), 3 decimals. If no `DOSE` line arrives, the console uses its own calculated DAP (veterinary version: never sent). Meter enabled but no reading → warning `W603`. `LAST?` returns `DONE` followed by `DOSE` when available.
+
 ### 5.4 `ERROR E=<code> CLR=0|1` and `INTERLOCK DOOR=0|1 ESTOP=0|1 HS=OK|FAULT FOCUS=L|S|FAULT`
 
 ## 6. Reply codes in `NAK`
@@ -94,7 +97,7 @@ Sent on request, on connection, and when the insert or mode changes. `P` is the 
 ```
 > 0001 HELLO*7242
 < 0100 ACK 0001*63B5
-< 0101 VERSION FW=0.9.0 HW=A TGP=1 IF=0.4 TUBE=DF-161SBR CTRL=PC LINK=TGP SN=FE0001*38D5
+< 0101 VERSION FW=0.9.0 HW=A TGP=1 IF=0.5 TUBE=DF-161SBR CTRL=PC LINK=TGP SN=FE0001 OPT=FLUORO+DAP*311C
 > 0012 SET KV=70.0 MA=20 MS=100 FO=L*CE47
 < 0102 ACK 0012*BE6D
 < 0103 ACTUAL KV=70.0 MA=20 MS=100 MAS=2.00 FO=L MODE=RAD*AB5F
@@ -104,6 +107,7 @@ Sent on request, on connection, and when the insert or mode changes. `P` is the 
 < 0105 PONG 0020*4005
   (operator presses hand switch stage 1, then stage 2)
 < 0106 STATE ST=DONE XN=152 KV=70.0 MA=20 MS=100 AKV=69.8 AMA=19.9 AMS=100 IRR=99 MAS=1.99 MEAS=1 CUT=0 END=E000*0465
+< 0107 DOSE XN=152 DAP=1.234 SRC=METER*7681
 ```
 
 ## 8. Open points
