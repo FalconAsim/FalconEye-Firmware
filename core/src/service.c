@@ -14,6 +14,7 @@ bool svc_apply_boot(exposure_sm_t *sm, const nv_settings_t *st)
     }
     sm->cfg.fluoro_enabled = st->fluoro_enabled != 0u;
     sm->cfg.dap_meter_enabled = st->dap_meter_enabled != 0u;
+    sm->cfg.large_focus_off = st->large_focus_off != 0u;
     sm_load_boot_defaults(sm);
     return ok;
 }
@@ -112,6 +113,21 @@ svc_result_t svc_set_insert(svc_t *svc, tube_insert_t id)
     if (c != SVC_OK) return c;
     tube_select(&svc->sm->tube, id);
     sm_load_boot_defaults(svc->sm);       /* yeni insertin sınırlarına göre */
+    return SVC_OK;
+}
+
+svc_result_t svc_set_large_focus(svc_t *svc, bool on)
+{
+    const svc_result_t r = pre(svc);
+    if (r != SVC_OK) return r;
+    const nv_settings_t old = svc->data->settings;
+    svc->data->settings.large_focus_off = (uint8_t)(on ? 0u : 1u);
+    const svc_result_t c = commit(svc, &old);
+    if (c != SVC_OK) return c;
+    svc->sm->cfg.large_focus_off = !on;
+    if (!on && svc->sm->params.focus == FOCUS_LARGE && tube_has_small_focus(&svc->sm->tube)) {
+        sm_load_boot_defaults(svc->sm);   /* küçük fokusa dön */
+    }
     return SVC_OK;
 }
 

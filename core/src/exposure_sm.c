@@ -64,6 +64,9 @@ sm_set_result_t sm_set_params_ex(exposure_sm_t *sm, const exposure_params_t *p)
     if (p->mode == MODE_FLUORO && !sm_fluoro_available(sm)) {
         return SM_SET_FLUORO_DISABLED;
     }
+    if (p->focus == FOCUS_LARGE && !sm_focus_available(sm, FOCUS_LARGE)) {
+        return SM_SET_FOCUS_DISABLED;
+    }
     if (sm->state == ST_PREP || sm->state == ST_READY) {
         /* Fokus rölesi yük altında anahtarlanmaz; mod değişimi (el butonu /
          * pedal) hazırlığın anlamını değiştirir. İkisi de hazırlıkta yasak. */
@@ -88,6 +91,12 @@ sm_set_result_t sm_set_params_ex(exposure_sm_t *sm, const exposure_params_t *p)
 bool sm_set_params(exposure_sm_t *sm, const exposure_params_t *p)
 {
     return sm_set_params_ex(sm, p) == SM_SET_OK;
+}
+
+bool sm_focus_available(const exposure_sm_t *sm, focus_t focus)
+{
+    if (focus == FOCUS_SMALL) return tube_has_small_focus(&sm->tube);
+    return !(tube_has_small_focus(&sm->tube) && sm->cfg.large_focus_off);
 }
 
 bool sm_fluoro_available(const exposure_sm_t *sm)

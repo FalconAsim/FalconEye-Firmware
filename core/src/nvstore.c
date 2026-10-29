@@ -50,6 +50,7 @@ void nv_defaults(nv_data_t *d)
     d->settings.pc_required = 0;
     d->settings.tube_insert = 0;          /* TUBE_INSERT_DF161SBR */
     d->settings.dap_meter_enabled = 0;    /* varsayılan: DAP'ı yazılım hesaplar */
+    d->settings.large_focus_off = 1;      /* DF-161SBR yalnız küçük fokusla (Asım, 29.10.2026) */
 }
 
 static uint32_t rec_crc(const nv_record_t *r)

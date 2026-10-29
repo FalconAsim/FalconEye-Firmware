@@ -314,7 +314,7 @@ static void line_dose(tgp_ctx_t *c, out_t *o, const exposure_record_t *r, uint32
 static void lines_limits(tgp_ctx_t *c, out_t *o)
 {
     struct { focus_t f; exp_mode_t m; bool on; } rows[3] = {
-        { FOCUS_LARGE, MODE_RADIOGRAPHY, true },
+        { FOCUS_LARGE, MODE_RADIOGRAPHY, sm_focus_available(c->sm, FOCUS_LARGE) },
         { FOCUS_SMALL, MODE_RADIOGRAPHY, tube_has_small_focus(&c->sm->tube) },
         { FOCUS_SMALL, MODE_FLUORO, sm_fluoro_available(c->sm) },
     };
@@ -412,7 +412,8 @@ static void cmd_set(tgp_ctx_t *c, out_t *o, int seq, const char *args, bool mode
         case SM_SET_OK:              break;
         case SM_SET_BUSY:            line_nak(c, o, seq, 'E', TGP_ERR_BUSY); return;
         case SM_SET_FOCUS_LOCKED:    line_nak(c, o, seq, 'E', 213); return;
-        case SM_SET_FLUORO_DISABLED: line_nak(c, o, seq, 'E', TGP_ERR_DISABLED); return;
+        case SM_SET_FLUORO_DISABLED:
+        case SM_SET_FOCUS_DISABLED:  line_nak(c, o, seq, 'E', TGP_ERR_DISABLED); return;
         }
         line_ack(c, o, seq);
         line_actual(c, o);
@@ -421,6 +422,9 @@ static void cmd_set(tgp_ctx_t *c, out_t *o, int seq, const char *args, bool mode
 
     if (q.p.focus == FOCUS_SMALL && !tube_has_small_focus(&c->sm->tube)) {
         line_nak(c, o, seq, 'E', 214); return;   /* E214: bu tüpte küçük fokus yok */
+    }
+    if (q.p.focus == FOCUS_LARGE && !sm_focus_available(c->sm, FOCUS_LARGE)) {
+        line_nak(c, o, seq, 'E', TGP_ERR_DISABLED); return;   /* büyük fokus bu cihazda kapalı */
     }
     if (q.p.mode == MODE_FLUORO && !sm_fluoro_available(c->sm)) {
         line_nak(c, o, seq, 'E', TGP_ERR_DISABLED); return;
@@ -443,7 +447,8 @@ static void cmd_set(tgp_ctx_t *c, out_t *o, int seq, const char *args, bool mode
     case SM_SET_OK:              break;
     case SM_SET_BUSY:            line_nak(c, o, seq, 'E', TGP_ERR_BUSY); return;
     case SM_SET_FOCUS_LOCKED:    line_nak(c, o, seq, 'E', 213); return;
-    case SM_SET_FLUORO_DISABLED: line_nak(c, o, seq, 'E', TGP_ERR_DISABLED); return;
+    case SM_SET_FLUORO_DISABLED:
+    case SM_SET_FOCUS_DISABLED:  line_nak(c, o, seq, 'E', TGP_ERR_DISABLED); return;
     }
     line_ack(c, o, seq);
     line_actual(c, o);

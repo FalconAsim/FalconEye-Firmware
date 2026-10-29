@@ -2,7 +2,8 @@
  * FalconEye kumanda paneli - sistem sabitleri
  *
  * Kaynaklar:
- *  - Referans/feedback ölçeği: kullanıcı (6 V = 110 kV, 6 V = 50 mA)
+ *  - Referans ölçeği: EP-REF / IP-REF ölçümü (Asım, 29.10.2026; DF-161SBR küçük
+ *    fokus), calib_default. Feedback ölçeği: nominal (6 V = 110 kV, 6 V = 50 mA)
  *  - Flaman ısınma süresi: kullanıcı (4 s)
  *  - Tüp sınırları: Canon PE-DF-161SBR (2018-11), bkz. tube.c
  */
@@ -16,7 +17,10 @@
 
 /* --- Jeneratör --- */
 #define FE_GEN_POWER_MAX_W     3200.0f   /* Mevcut jeneratör; 5 kW modelde değişir */
-#define FE_GEN_KV_MAX           110.0f
+/* Eski panel 100 kV üstünde çalışmayacak şekilde sınırlıydı; bu invertör +
+ * monoblokla 100 kV üstü hiç kullanılmadı (Asım, 29.10.2026). 100 kV üstü
+ * yalnız kVp metre doğrulaması ve üretici onayıyla açılır. */
+#define FE_GEN_KV_MAX           100.0f
 
 /* --- Zamanlamalar (ms) --- */
 #define FE_TICK_MS                    1u

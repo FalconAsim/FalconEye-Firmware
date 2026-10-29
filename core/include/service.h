@@ -6,6 +6,9 @@
  *  - DAP metre: servis menüsünden açılır/kapanır. Kapalıyken (veteriner
  *    versiyonu) kart DAP göndermez, DAP'ı FalconXray hesaplar.
  *  - Kurulu insert: servis menüsünden seçilir.
+ *  - Büyük fokus (çift fokuslu insertte): servis menüsünden açılır/kapanır.
+ *    Varsayılan kapalı: cihaz DF-161SBR ile yalnız küçük fokusta çalışıyor
+ *    (Asım, 29.10.2026).
  *
  * Kurallar (risk notu, arayüz tanımı §10):
  *  - Servis moduna yalnız panelden (Kart A ekranı) PIN ile girilir; DR
@@ -65,6 +68,7 @@ void svc_tick(svc_t *svc, uint32_t dt_ms);
 svc_result_t svc_set_fluoro(svc_t *svc, bool on);
 svc_result_t svc_set_dap_meter(svc_t *svc, bool on);
 svc_result_t svc_set_insert(svc_t *svc, tube_insert_t id);
+svc_result_t svc_set_large_focus(svc_t *svc, bool on);
 
 const char *svc_result_text(svc_result_t r);
 

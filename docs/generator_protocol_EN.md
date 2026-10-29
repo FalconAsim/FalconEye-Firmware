@@ -71,6 +71,7 @@ On every state change. After each exposure:
 These values are intended for the DICOM header / dose report.
 
 ### 5.3 `LIMITS TUBE=<insert> MODE=RAD|FLUORO FO=L|S KV=<min>-<max> MA=1-<max> MS=1-<max> P=<W>`
+Current units: highest kV is **100** (generator limit until verified with a kVp meter). A focus switched off in the panel's service menu (e.g. large focus on a unit that runs DF-161SBR on small focus only) has no `LIMITS` line; `SET FO=` to it → `NAK E906`.
 Sent on request, on connection, and when the insert or mode changes. `P` is the maximum power for that focus and mode, limited by the generator. Single-focus inserts report `FO=L` only. The console should clamp its presets to these ranges; the panel enforces them anyway.
 
 ### 5.3a `DOSE XN=<n> DAP=<dGy·cm²> SRC=METER`

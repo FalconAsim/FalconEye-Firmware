@@ -126,6 +126,23 @@ TEST(insert_secimi)
     CHECK(!svc_apply_boot(&sm, &bad) && sm.tube.insert == TUBE_INSERT_DF161SBR, "gecersiz kayit: DF-161SBR");
 }
 
+TEST(buyuk_fokus_secenegi)
+{
+    fresh();
+    CHECK(sm.cfg.large_focus_off, "varsayilan: DF-161SBR yalniz kucuk fokus");
+    CHECK(!sm_focus_available(&sm, FOCUS_LARGE) && sm_focus_available(&sm, FOCUS_SMALL), "buyuk fokus secilemez");
+    exposure_params_t p = sm.params; p.focus = FOCUS_LARGE;
+    CHECK(sm_set_params_ex(&sm, &p) == SM_SET_FOCUS_DISABLED && sm.params.focus == FOCUS_SMALL, "buyuk fokus reddedildi");
+    svc_enter(&svc, PIN);
+    CHECK(svc_set_large_focus(&svc, true) == SVC_OK && sm_set_params_ex(&sm, &p) == SM_SET_OK, "acilinca secilir");
+    CHECK(svc_set_large_focus(&svc, false) == SVC_OK && sm.params.focus == FOCUS_SMALL, "kapatilinca kucuk fokusa doner");
+    boot();
+    CHECK(sm.cfg.large_focus_off, "ayar kalici");
+    svc_enter(&svc, PIN);
+    svc_set_insert(&svc, TUBE_INSERT_D067SB);
+    CHECK(sm_focus_available(&sm, FOCUS_LARGE) && sm.params.focus == FOCUS_LARGE, "tek fokuslu insertte (tek) fokus her zaman kullanilir");
+}
+
 TEST(hazirlikta_ayar_degismez)
 {
     fresh();
@@ -161,6 +178,7 @@ int main(void)
     RUN(floroskopi_ac_kapat);
     RUN(dap_metre);
     RUN(insert_secimi);
+    RUN(buyuk_fokus_secenegi);
     RUN(hazirlikta_ayar_degismez);
     RUN(kayit_hatasi_geri_alinir);
     return REPORT();
