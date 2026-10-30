@@ -27,6 +27,13 @@ static void enter(exposure_sm_t *sm, sm_state_t s)
     sm->stuck_ms = 0u;
 }
 
+/* Filaman hazır bilgisi: sinyal yoksa (filament_ready_by_timer) hazır,
+ * ısınma süresiyle belirlenir */
+static bool fil_ok(const exposure_sm_t *sm, const sm_inputs_t *in)
+{
+    return sm->cfg.filament_ready_by_timer || in->filament_ok;
+}
+
 void sm_init(exposure_sm_t *sm, const sm_config_t *cfg)
 {
     memset(sm, 0, sizeof(*sm));
@@ -474,9 +481,9 @@ void sm_step(exposure_sm_t *sm, const sm_inputs_t *raw, sm_outputs_t *out, uint3
         if (sm->state == ST_PREP) {
             if (sm->t_state_ms >= FE_FILAMENT_WARMUP_MS) {
                 const bool det_ok = !sm->cfg.detector_ready_required || in->detector_ready;
-                if (in->filament_ok && det_ok) {
+                if (fil_ok(sm, in) && det_ok) {
                     sm->state = ST_READY;   /* zamanlayıcıyı sıfırlamadan */
-                } else if (!in->filament_ok &&
+                } else if (!fil_ok(sm, in) &&
                            sm->t_state_ms >= FE_FILAMENT_WARMUP_MS + FE_FILAMENT_OK_TIMEOUT_MS) {
                     lock(sm, END_FILAMENT_TIMEOUT);
                     outputs_off(out);
@@ -491,7 +498,7 @@ void sm_step(exposure_sm_t *sm, const sm_inputs_t *raw, sm_outputs_t *out, uint3
 
         /* ST_READY */
         out->ready_indicator = true;
-        if (!in->filament_ok) {
+        if (!fil_ok(sm, in)) {
             lock(sm, END_FILAMENT_LOST);
             outputs_off(out);
             break;
@@ -559,7 +566,7 @@ void sm_step(exposure_sm_t *sm, const sm_inputs_t *raw, sm_outputs_t *out, uint3
             /* Floroskopide pedalı bırakmak normal bitiştir; radyografide
              * süre dolmadan bırakmak "erken bırakıldı" olarak raporlanır. */
             reason = is_fluoro(sm) ? END_RELEASED : END_EARLY_RELEASE;
-        } else if (!in->filament_ok) {
+        } else if (!fil_ok(sm, in)) {
             reason = END_FILAMENT_LOST;
         } else if (sm->t_state_ms > SM_RL5_SETTLE_MS) {
             /* RL5 oturdu: X-RAY ON aktif */
