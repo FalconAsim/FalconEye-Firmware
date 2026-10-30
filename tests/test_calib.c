@@ -18,25 +18,26 @@ TEST(nominal_olcek)
     CHECK(near(calib_kv_ref_volts(&c, 70), 3.45f, 1e-4f), "70 kV = 3.45 V (olculen)");
     CHECK(near(calib_kv_ref_volts(&c, 100), 5.04f, 1e-4f), "100 kV = 5.04 V (olculen)");
     CHECK(near(calib_kv_ref_volts(&c, 75), (3.45f + 3.98f) / 2, 1e-4f), "ara deger");
-    CHECK(near(calib_kv_ref_volts(&c, 110), 5.563f, 1e-3f), "110 kV dogrusal uzatma");
-    CHECK(near(calib_ma_ref_volts(&c, 60, 10), 4.725f, 1e-3f), "60 kV 10 mA = 4.72 V (olculen)");
-    CHECK(near(calib_ma_ref_volts(&c, 60, 2), 0.831f, 1e-3f), "60 kV 2 mA = 0.81 V (olculen)");
-    CHECK(calib_ma_ref_volts(&c, 100, 5) < calib_ma_ref_volts(&c, 70, 5) &&
-          calib_ma_ref_volts(&c, 70, 5) < calib_ma_ref_volts(&c, 40, 5), "kV artinca mA referansi duser");
-    CHECK(near(calib_ma_ref_volts(&c, 100, 5) / calib_ma_ref_volts(&c, 40, 5), 0.78f, 1e-3f), "100/40 kV orani 0.78");
-    CHECK(calib_ma_ref_volts(&c, 40, 15) <= 6.0f, "DAC tavani 6 V");
+    CHECK(near(calib_eval(&c.kv_to_v, 110), 5.563f, 1e-3f), "110 kV tablo: dogrusal uzatma");
+    CHECK(near(calib_kv_ref_volts(&c, 110), CAL_EP_MAX_V, 1e-4f), "cikis EP donanim tavaninda (5,2 V) kirpilir");
+    CHECK(near(calib_ma_ref_volts(&c, CAL_FOCUS_SMALL, 60, 10), 4.725f, 1e-3f), "60 kV 10 mA = 4.72 V (olculen)");
+    CHECK(near(calib_ma_ref_volts(&c, CAL_FOCUS_SMALL, 60, 2), 0.831f, 1e-3f), "60 kV 2 mA = 0.81 V (olculen)");
+    CHECK(calib_ma_ref_volts(&c, CAL_FOCUS_SMALL, 100, 5) < calib_ma_ref_volts(&c, CAL_FOCUS_SMALL, 70, 5) &&
+          calib_ma_ref_volts(&c, CAL_FOCUS_SMALL, 70, 5) < calib_ma_ref_volts(&c, CAL_FOCUS_SMALL, 40, 5), "kV artinca mA referansi duser");
+    CHECK(near(calib_ma_ref_volts(&c, CAL_FOCUS_SMALL, 100, 5) / calib_ma_ref_volts(&c, CAL_FOCUS_SMALL, 40, 5), 0.78f, 1e-3f), "100/40 kV orani 0.78");
+    CHECK(calib_ma_ref_volts(&c, CAL_FOCUS_SMALL, 40, 15) <= CAL_IP_MAX_V_SMALL + 1e-4f, "kucuk fokus tam skalasi 5,0 V");
     CHECK(near(calib_kv_from_fb(&c, 3.0f), 55.0f, 1e-3f), "FB 3 V = 55 kV");
     CHECK(near(calib_ma_from_fb(&c, 1.2f), 10.0f, 1e-3f), "FB 1.2 V = 10 mA");
 }
 
 TEST(dac_adc_donusumu)
 {
-    CHECK(calib_volts_to_dac(6.0f) == 4095, "6 V = tam skala");
+    CHECK(calib_volts_to_dac(CAL_EP_MAX_V) == 4095, "EP tam skala 5,2 V");
     CHECK(calib_volts_to_dac(0.0f) == 0, "0 V = 0");
-    CHECK(calib_volts_to_dac(9.0f) == 4095, "6 V ustu kirpilir (donanim tavani)");
+    CHECK(calib_volts_to_dac(9.0f) == 4095, "tam skala ustu kirpilir (donanim tavani)");
     CHECK(calib_volts_to_dac(-1.0f) == 0, "negatif kirpilir");
     CHECK(calib_volts_to_dac(NAN) == 0, "NaN -> 0 V (guvenli taraf)");
-    CHECK(abs((int)calib_volts_to_dac(3.0f) - 2048) <= 1, "3 V = yarim skala");
+    CHECK(abs((int)calib_volts_to_dac(CAL_EP_MAX_V / 2) - 2048) <= 1, "EP yarim skala");
     CHECK(near(calib_adc_to_volts(4095), 6.6f, 1e-3f), "ADC tam skala = 6.6 V");
 }
 
@@ -60,8 +61,8 @@ TEST(cok_noktali_kalibrasyon)
 TEST(gecersiz_tablo_reddi)
 {
     calib_t c; calib_default(&c);
-    c.kv_to_v.y[1] = 7.0f;
-    CHECK(!calib_valid(&c), "6 V ustu referans reddedilir");
+    c.kv_to_v.y[1] = 11.0f;
+    CHECK(!calib_valid(&c), "10 V ustu referans reddedilir");
     calib_default(&c);
     c.kv_to_v.n = 3; c.kv_to_v.x[2] = 30.0f; c.kv_to_v.y[2] = 6.0f;
     CHECK(!calib_valid(&c), "x azalan reddedilir");
@@ -73,15 +74,15 @@ TEST(gecersiz_tablo_reddi)
 TEST(ma_kv_bagimli)
 {
     calib_t c; calib_default(&c);
-    c.ma.rows = 2;
-    c.ma.kv[0] = 50; c.ma.kv[1] = 90;
+    c.ma[CAL_FOCUS_SMALL].rows = 2;
+    c.ma[CAL_FOCUS_SMALL].kv[0] = 50; c.ma[CAL_FOCUS_SMALL].kv[1] = 90;
     cal_curve_t two = { .n = 2, .x = { 0.0f, 50.0f }, .y = { 0.0f, 6.0f } };
-    c.ma.ma_to_v[0] = two;                  /* 50 kV */
-    c.ma.ma_to_v[1] = two;
-    c.ma.ma_to_v[1].y[1] = 5.4f;            /* 90 kV: uzay yuku etkisi, daha az flaman */
-    const float v50 = calib_ma_ref_volts(&c, 50, 25);
-    const float v90 = calib_ma_ref_volts(&c, 90, 25);
-    const float v70 = calib_ma_ref_volts(&c, 70, 25);
+    c.ma[CAL_FOCUS_SMALL].ma_to_v[0] = two;                  /* 50 kV */
+    c.ma[CAL_FOCUS_SMALL].ma_to_v[1] = two;
+    c.ma[CAL_FOCUS_SMALL].ma_to_v[1].y[1] = 5.4f;            /* 90 kV: uzay yuku etkisi, daha az flaman */
+    const float v50 = calib_ma_ref_volts(&c, CAL_FOCUS_SMALL, 50, 25);
+    const float v90 = calib_ma_ref_volts(&c, CAL_FOCUS_SMALL, 90, 25);
+    const float v70 = calib_ma_ref_volts(&c, CAL_FOCUS_SMALL, 70, 25);
     CHECK(near(v50, 3.0f, 1e-3f) && near(v90, 2.7f, 1e-3f), "satir degerleri");
     CHECK(near(v70, 2.85f, 1e-3f), "kV arasinda ara deger");
     CHECK(calib_valid(&c), "gecerli");
@@ -174,19 +175,20 @@ TEST(surum1_kaydi_donusturulur)
 {
     typedef struct { float gp; uint8_t lang, det, fl, pc; uint32_t cnt; } s1_t;
     typedef struct { uint32_t magic; uint16_t version, length; uint32_t seq; } h_t;
-    typedef struct { h_t h; struct { calib_t calib; s1_t st; } d; uint32_t crc; } r1_t;
+    typedef struct { cal_curve_t kv; cal_ma_table_t ma; cal_curve_t kvfb, mafb; } cold_t;
+    typedef struct { h_t h; struct { cold_t calib; s1_t st; } d; uint32_t crc; } r1_t;
     memset(fram, 0xFF, sizeof fram);
     static r1_t r;
     memset(&r, 0, sizeof r);
     r.h.magic = NV_MAGIC; r.h.version = 1u; r.h.length = (uint16_t)sizeof(r.d); r.h.seq = 5u;
-    calib_default(&r.d.calib);
-    r.d.calib.kv_to_v.y[1] *= 0.98f;               /* ayarlanmış kalibrasyon */
+    { calib_t t; calib_default(&t); r.d.calib.kv = t.kv_to_v; r.d.calib.ma = t.ma[CAL_FOCUS_SMALL]; r.d.calib.kvfb = t.kvfb_v_to_kv; r.d.calib.mafb = t.mafb_v_to_ma; }
+    r.d.calib.kv.y[1] *= 0.98f;               /* ayarlanmış kalibrasyon */
     r.d.st.gp = 3000.0f; r.d.st.fl = 1u; r.d.st.cnt = 1234u; r.d.st.det = DET_PROFILE_SYNC;
     r.crc = nv_crc32(&r, offsetof(r1_t, crc));
     memcpy(fram + NV_SLOT_A_ADDR, &r, sizeof r);
     nvstore_t nv; nv_data_t d;
     CHECK(nv_load(&nv, &ops, &d) == NV_LOAD_ONE_BAD, "surum 1 kaydi okundu");
-    CHECK(d.calib.kv_to_v.y[1] == r.d.calib.kv_to_v.y[1], "kalibrasyon korundu");
+    CHECK(d.calib.kv_to_v.y[1] == r.d.calib.kv.y[1], "kalibrasyon korundu");
     CHECK(d.settings.gen_power_max_w == 3000.0f && d.settings.fluoro_enabled == 1u &&
           d.settings.exposure_count == 1234u && d.settings.detector_profile == DET_PROFILE_SYNC, "eski ayarlar korundu");
     CHECK(d.settings.tube_insert == 0u && d.settings.dap_meter_enabled == 0u, "yeni alanlar varsayilan");
@@ -194,6 +196,30 @@ TEST(surum1_kaydi_donusturulur)
     nvstore_t nv2; nv_data_t e;
     CHECK(nv_load(&nv2, &ops, &e) == NV_LOAD_OK && e.settings.exposure_count == 1234u && nv2.seq == 6u,
           "iki kopya gecerli, sira numarasi devam");
+}
+
+/* Sürüm 2 kaydı (tek mA tablosu): küçük fokusa taşınır, büyük fokus varsayılan */
+TEST(surum2_kaydi_donusturulur)
+{
+    typedef struct { cal_curve_t kv; cal_ma_table_t ma; cal_curve_t kvfb, mafb; } cold_t;
+    typedef struct { uint32_t magic; uint16_t version, length; uint32_t seq; } h_t;
+    typedef struct { h_t h; struct { cold_t calib; nv_settings_t st; } d; uint32_t crc; } r2_t;
+    memset(fram, 0xFF, sizeof fram);
+    static r2_t r;
+    memset(&r, 0, sizeof r);
+    calib_t t; calib_default(&t);
+    r.h.magic = NV_MAGIC; r.h.version = 2u; r.h.length = (uint16_t)sizeof(r.d); r.h.seq = 9u;
+    r.d.calib.kv = t.kv_to_v; r.d.calib.ma = t.ma[CAL_FOCUS_SMALL]; r.d.calib.kvfb = t.kvfb_v_to_kv; r.d.calib.mafb = t.mafb_v_to_ma;
+    r.d.calib.ma.ma_to_v[1].y[3] *= 1.01f;     /* küçük fokusta ayarlanmış nokta */
+    r.d.st.exposure_count = 77u; r.d.st.dap_meter_enabled = 1u; r.d.st.large_focus_off = 1u;
+    r.crc = nv_crc32(&r, offsetof(r2_t, crc));
+    memcpy(fram + NV_SLOT_B_ADDR, &r, sizeof r);
+    nvstore_t nv; nv_data_t d;
+    CHECK(nv_load(&nv, &ops, &d) == NV_LOAD_ONE_BAD, "surum 2 kaydi okundu");
+    CHECK(d.calib.ma[CAL_FOCUS_SMALL].ma_to_v[1].y[3] == r.d.calib.ma.ma_to_v[1].y[3], "kucuk fokus mA tablosu korundu");
+    CHECK(d.calib.ma[CAL_FOCUS_LARGE].rows == 1, "buyuk fokus varsayilan tablo");
+    CHECK(d.settings.exposure_count == 77u && d.settings.dap_meter_enabled == 1u, "ayarlar korundu");
+    CHECK(nv_save(&nv, &d), "surum 3 olarak kaydedildi");
 }
 
 int main(void)
@@ -210,5 +236,6 @@ int main(void)
     RUN(bit_bozulmasi);
     RUN(gecersiz_kalibrasyon_yazilmaz);
     RUN(surum1_kaydi_donusturulur);
+    RUN(surum2_kaydi_donusturulur);
     return REPORT();
 }

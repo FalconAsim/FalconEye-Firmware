@@ -41,7 +41,9 @@ typedef enum {
     SVC_ERR_LOCKED_OUT,     /* çok fazla yanlış PIN, bekleniyor */
     SVC_ERR_BUSY,           /* hazırlık / hazır / ışınlama sürüyor */
     SVC_ERR_PARAM,
-    SVC_ERR_SAVE            /* kalıcı belleğe yazılamadı, değişiklik geri alındı */
+    SVC_ERR_SAVE,           /* kalıcı belleğe yazılamadı, değişiklik geri alındı */
+    SVC_ERR_NO_EXPOSURE,    /* kalibrasyon: geçerli (tam süre) son çekim yok */
+    SVC_ERR_ALREADY_USED    /* bu çekimin ölçümü zaten girildi: yeni çekim yapın */
 } svc_result_t;
 
 typedef struct {
@@ -69,6 +71,30 @@ svc_result_t svc_set_fluoro(svc_t *svc, bool on);
 svc_result_t svc_set_dap_meter(svc_t *svc, bool on);
 svc_result_t svc_set_insert(svc_t *svc, tube_insert_t id);
 svc_result_t svc_set_large_focus(svc_t *svc, bool on);
+
+/* --- Işınlamalı kalibrasyon (Asım, 30.10.2026: klasik yöntem, nokta nokta) ---
+ * 1) Servis modunda kV (veya mA) ve fokus ayarlanır, normal çekim yapılır
+ *    (el butonu, bütün güvenlik zinciri devrede).
+ * 2) kVp metrenin (veya mA metrenin) okuduğu değer girilir.
+ * 3) Firmware SON ÇEKİMİN ayarlarını kullanır (yanlış noktaya yazmayı önler):
+ *    çekim tam süre bitmiş olmalı (END_TIME_DONE).
+ * 4) Sonuç CAL_OK ise aynı değerle tekrar çekilir; CAL_IN_TOL olunca nokta
+ *    doğrulanmış olur ve sıradaki noktaya geçilir. Her adım FRAM'e yazılır.
+ * Aynı ölçüm feedback tablosunu da (EP-MON / IP-MON → gerçek kV / mA) düzeltir:
+ * çekimdeki ortalama feedback gerilimi ↔ ölçülen değer (Asım 30.10.2026).
+ * Toleranslar: kV en çok (0,5 kV, %1); mA en çok (0,1 mA, %2). */
+#define SVC_CAL_KV_TOL_ABS   0.5f
+#define SVC_CAL_KV_TOL_FRAC  0.01f
+#define SVC_CAL_MA_TOL_ABS   0.1f
+#define SVC_CAL_MA_TOL_FRAC  0.02f
+
+/* fb_res: feedback tablosu sonucu (CAL_OK = öğrenildi; CAL_ERR_PARAM = çekimde
+ * feedback ölçümü yoktu, MEAS=0 – EP-MON/IP-MON bağlı değil). DAC düzeltmesi
+ * feedback sonucundan bağımsızdır. Her çekim için bir kez girilir. */
+svc_result_t svc_cal_kv(svc_t *svc, float measured_kv, cal_result_t *res, cal_result_t *fb_res, float *v_new);
+svc_result_t svc_cal_ma(svc_t *svc, float measured_ma, cal_result_t *res, cal_result_t *fb_res, float *v_new);
+/* Kalibrasyonu fabrika başlangıç tablolarına döndürür (kV, mA veya ikisi) */
+svc_result_t svc_cal_reset(svc_t *svc, bool kv, bool ma);
 
 const char *svc_result_text(svc_result_t r);
 

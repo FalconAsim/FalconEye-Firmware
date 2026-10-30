@@ -15,14 +15,37 @@ typedef struct {
     uint32_t crc;      /* başlık + veri üzerinden */
 } nv_record_t;
 
+/* Sürüm 1–2 kalibrasyon düzeni: tek (küçük fokus ölçülü) mA tablosu */
+typedef struct {
+    cal_curve_t kv_to_v;
+    cal_ma_table_t ma;
+    cal_curve_t kvfb_v_to_kv;
+    cal_curve_t mafb_v_to_ma;
+} calib_old_t;
+
+/* Eski kalibrasyonu yeni düzene çevirir: tek mA tablosu küçük fokusa,
+ * büyük fokus varsayılan (yer tutucu) tabloyla. */
+static bool calib_from_old(const calib_old_t *o, calib_t *c)
+{
+    calib_default(c);
+    c->kv_to_v = o->kv_to_v;
+    c->ma[CAL_FOCUS_SMALL] = o->ma;
+    c->kvfb_v_to_kv = o->kvfb_v_to_kv;
+    c->mafb_v_to_ma = o->mafb_v_to_ma;
+    return calib_valid(c);
+}
+
 /* Sürüm 1 düzeni (firmware v0.8) – yalnız okuma ve dönüştürme için */
 typedef struct {
     float gen_power_max_w;
     uint8_t language, detector_profile, fluoro_enabled, pc_required;
     uint32_t exposure_count;
 } nv_settings_v1_t;
-typedef struct { calib_t calib; nv_settings_v1_t settings; } nv_data_v1_t;
+typedef struct { calib_old_t calib; nv_settings_v1_t settings; } nv_data_v1_t;
 typedef struct { nv_header_t h; nv_data_v1_t d; uint32_t crc; } nv_record_v1_t;
+/* Sürüm 2 düzeni (eski kalibrasyon + bugünkü ayarlar) */
+typedef struct { calib_old_t calib; nv_settings_t settings; } nv_data_v2_t;
+typedef struct { nv_header_t h; nv_data_v2_t d; uint32_t crc; } nv_record_v2_t;
 
 _Static_assert(sizeof(nv_record_t) <= NV_SLOT_SIZE, "kayit bir slota sigmali");
 
@@ -66,10 +89,9 @@ static bool read_slot_v1(const nv_ops_t *ops, uint32_t addr, nv_record_t *r)
     if (!ops->read(addr, &o, sizeof o)) return false;
     if (o.h.magic != NV_MAGIC || o.h.version != 1u || o.h.length != sizeof(nv_data_v1_t)) return false;
     if (nv_crc32(&o, offsetof(nv_record_v1_t, crc)) != o.crc) return false;
-    if (!calib_valid(&o.d.calib)) return false;
     nv_defaults(&r->d);
     r->h = o.h;
-    r->d.calib = o.d.calib;
+    if (!calib_from_old(&o.d.calib, &r->d.calib)) return false;
     r->d.settings.gen_power_max_w = o.d.settings.gen_power_max_w;
     r->d.settings.language = o.d.settings.language;
     r->d.settings.detector_profile = o.d.settings.detector_profile;
@@ -79,10 +101,24 @@ static bool read_slot_v1(const nv_ops_t *ops, uint32_t addr, nv_record_t *r)
     return true;
 }
 
+/* Sürüm 2: ayarlar aynen, kalibrasyon yeni düzene (fokus başına mA) */
+static bool read_slot_v2(const nv_ops_t *ops, uint32_t addr, nv_record_t *r)
+{
+    static nv_record_v2_t o;
+    if (!ops->read(addr, &o, sizeof o)) return false;
+    if (o.h.magic != NV_MAGIC || o.h.version != 2u || o.h.length != sizeof(nv_data_v2_t)) return false;
+    if (nv_crc32(&o, offsetof(nv_record_v2_t, crc)) != o.crc) return false;
+    nv_defaults(&r->d);
+    r->h = o.h;
+    r->d.settings = o.d.settings;
+    return calib_from_old(&o.d.calib, &r->d.calib);
+}
+
 static bool read_slot(const nv_ops_t *ops, uint32_t addr, nv_record_t *r)
 {
     if (!ops->read(addr, r, sizeof(*r))) return false;
     if (r->h.magic == NV_MAGIC && r->h.version == 1u) return read_slot_v1(ops, addr, r);
+    if (r->h.magic == NV_MAGIC && r->h.version == 2u) return read_slot_v2(ops, addr, r);
     if (r->h.magic != NV_MAGIC || r->h.version != NV_VERSION) return false;
     if (r->h.length != sizeof(nv_data_t)) return false;
     if (rec_crc(r) != r->crc) return false;

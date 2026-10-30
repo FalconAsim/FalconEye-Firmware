@@ -90,9 +90,13 @@ Jeneratör alarmı, kV/mA tolerans, yedek zamanlayıcı, acil stop --> HATA (ona
 
 ## Kalibrasyon ve kalıcı saklama
 
-- Kalibrasyonsuz cihaz **eski panelden ölçülen** referans tablosuyla çalışır (29.10.2026, DF-161SBR küçük fokus): EP-REF 40–100 kV, V = 0,0529·kV − 0,26; IP-REF 60 kV'de V = 0,487·mA − 0,14, kV satırları 40/60/70/100 (eski panelin uzay yükü düzeltmesi: 100 kV'de 40 kV'nin %78'i). Feedback ölçeği hâlâ nominal (6 V = 110 kV, 6 V = 50 mA). kVp metre ve mAs metre ölçümleri girildikçe çok noktalı tablolar devreye girer (en fazla 16 nokta; mA tablosu 4 kV satırına kadar kV'ye bağlı).
-- DAC: 3.0 V referans × 2 kazanç = 6.0 V tavan. NaN veya aralık dışı değer 0 V'a çekilir.
-- FRAM'de iki kopya, sıra numarası ve CRC32. Yazma sırasında güç kesilirse diğer kopya kullanılır; geçersiz kalibrasyon tablosu hiç yazılmaz.
+- **Nokta tabloları** (formül değil), FRAM'de çift kopya + CRC32 (kayıt sürümü 3; sürüm 1–2 kalibrasyon korunarak dönüştürülür).
+  - kV: ayar kV → EP-REF (V), en çok 16 nokta.
+  - mA: **fokus başına ayrı tablo**, her fokusta en çok 4 kV satırı × 16 nokta (aynı mA için kV arttıkça referans düşer). Küçük fokus başlangıç satırları 40 / 60 / 70 / 100 kV; büyük fokus tek satır (70 kV), yeni kV satırları kalibrasyonda eklenir.
+- **Başlangıç değerleri** eski panelden ölçülen EP-REF / IP-REF (29.10.2026, DF-161SBR küçük fokus). Büyük fokus tablosu yer tutucu (0,19 V/mA) – ışınlamalı kalibrasyonsuz kullanılmaz (W602).
+- **Işınlamalı kalibrasyon – servis menüsü, klasik yöntem** (Asım 30.10.2026): kV ve fokus/mA ayarlanır, normal çekim yapılır (bütün güvenlik zinciri devrede); kVp metre (`svc_cal_kv`) veya mA metre (`svc_cal_ma`) okuması girilir. Firmware **son çekimin** ayarlarını kullanır (yalnız tam süreli radyografi çekimi), noktayı yerel eğimle düzeltir: V_yeni = V + (ayar − ölçülen) × dV/dx. Tek adımda en çok %10; %30 üstü fark ölçüm hatası sayılır; donanım tam skalası ve tablo monotonluğu korunur. Tolerans içindeyse nokta doğrulanır (kV ≤ max(0,5 kV, %1), mA ≤ max(0,1 mA, %2)). Her adım FRAM'e yazılır, yazılamazsa geri alınır. `svc_cal_reset` başlangıç tablolarına döndürür.
+- **Feedback kalibrasyonu** (Asım 30.10.2026): aynı ölçüm, çekim sırasında ölçülen ortalama EP-MON / IP-MON gerilimiyle eşleştirilip feedback tablosuna (gerilim → gerçek kV / mA) yazılır. Böylece kV/mA tolerans denetimleri (E302/E303/E306) ve yazılıma giden `AKV` / `AMA` ölçüm cihazına göre doğru olur. Feedback yoksa (MEAS=0, R83/R78 takılı değil) yalnız DAC tablosu düzeltilir. Her çekim için ölçüm bir kez girilir (`SVC_ERR_ALREADY_USED`).
+- **Donanım ölçekleri** (Kart B şema rev 0.3): EP efektif kazanç 1,733 (tam skala 5,20 V); IP küçük fokus 1,668 (5,0 V), büyük 3,287 (9,86 V) – sınır bölücüsü fokus rölesinin gerçek konumuna göre donanımla seçilir (`calib_dac_code(kanal, fokus, V)`). ADC geri okuma bölücüleri kanal başına (EP ÷2,2, IP ÷3,4, MON ÷2,2).
 
 ## Dedektör profilleri
 

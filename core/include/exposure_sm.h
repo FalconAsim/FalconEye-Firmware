@@ -131,6 +131,8 @@ typedef struct {
     end_reason_t reason;
     bool cut;              /* ışınlama bağlantı kopması nedeniyle kesildi */
     bool dap_valid;        /* DAP metreden okundu (sm_record_dap) */
+    bool cal_kv_used;      /* servis kalibrasyonunda kV ölçümü girildi (çekim başına bir kez) */
+    bool cal_ma_used;      /* servis kalibrasyonunda mA ölçümü girildi */
     float dap_dgycm2;      /* doz-alan çarpımı, dGy·cm² (DICOM 0018,115E birimi) */
     bool valid;
 } exposure_record_t;
