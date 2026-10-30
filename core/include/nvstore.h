@@ -19,7 +19,7 @@
 #include "calib.h"
 
 #define NV_MAGIC        0x4C434546u   /* "FECL" */
-#define NV_VERSION      2u   /* 2: insert ve DAP metre ayarı eklendi; 1 okunur ve dönüştürülür */
+#define NV_VERSION      3u   /* 3: mA kalibrasyonu fokus başına; 2: insert, DAP metre; 1–2 okunur ve dönüştürülür */
 #define NV_SLOT_SIZE    2048u
 #define NV_SLOT_A_ADDR  0x0000u
 #define NV_SLOT_B_ADDR  0x0800u

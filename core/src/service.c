@@ -131,6 +131,65 @@ svc_result_t svc_set_large_focus(svc_t *svc, bool on)
     return SVC_OK;
 }
 
+static float maxf2(float a, float b) { return a > b ? a : b; }
+
+static bool last_exposure_ok(const exposure_sm_t *sm)
+{
+    return sm->last_record.valid && sm->last_record.reason == END_TIME_DONE &&
+           sm->last_record.set.mode == MODE_RADIOGRAPHY;
+}
+
+/* Kalibrasyonu kaydeder; yazılamazsa eski tabloya döner */
+static svc_result_t commit_cal(svc_t *svc, const calib_t *old)
+{
+    if (nv_save(svc->nv, svc->data)) return SVC_OK;
+    svc->data->calib = *old;
+    return SVC_ERR_SAVE;
+}
+
+svc_result_t svc_cal_kv(svc_t *svc, float measured_kv, cal_result_t *res, float *v_new)
+{
+    const svc_result_t r = pre(svc);
+    if (r != SVC_OK) return r;
+    if (!last_exposure_ok(svc->sm)) return SVC_ERR_NO_EXPOSURE;
+    const float set = svc->sm->last_record.set.kv;
+    const calib_t old = svc->data->calib;
+    const cal_result_t cr = calib_correct_kv(&svc->data->calib, set, measured_kv,
+                                             maxf2(SVC_CAL_KV_TOL_ABS, SVC_CAL_KV_TOL_FRAC * set), v_new);
+    if (res) *res = cr;
+    if (cr != CAL_OK && cr != CAL_IN_TOL) return SVC_ERR_PARAM;
+    return commit_cal(svc, &old);
+}
+
+svc_result_t svc_cal_ma(svc_t *svc, float measured_ma, cal_result_t *res, float *v_new)
+{
+    const svc_result_t r = pre(svc);
+    if (r != SVC_OK) return r;
+    if (!last_exposure_ok(svc->sm)) return SVC_ERR_NO_EXPOSURE;
+    const exposure_params_t *p = &svc->sm->last_record.set;
+    const calib_t old = svc->data->calib;
+    const cal_result_t cr = calib_correct_ma(&svc->data->calib, (int)p->focus, p->kv, p->ma, measured_ma,
+                                             maxf2(SVC_CAL_MA_TOL_ABS, SVC_CAL_MA_TOL_FRAC * p->ma), v_new);
+    if (res) *res = cr;
+    if (cr != CAL_OK && cr != CAL_IN_TOL) return SVC_ERR_PARAM;
+    return commit_cal(svc, &old);
+}
+
+svc_result_t svc_cal_reset(svc_t *svc, bool kv, bool ma)
+{
+    const svc_result_t r = pre(svc);
+    if (r != SVC_OK) return r;
+    const calib_t old = svc->data->calib;
+    calib_t def;
+    calib_default(&def);
+    if (kv) { svc->data->calib.kv_to_v = def.kv_to_v; svc->data->calib.done &= (uint8_t)~CAL_DONE_KV; }
+    if (ma) {
+        svc->data->calib.ma[0] = def.ma[0]; svc->data->calib.ma[1] = def.ma[1];
+        svc->data->calib.done &= (uint8_t)~(CAL_DONE_MA_LARGE | CAL_DONE_MA_SMALL);
+    }
+    return commit_cal(svc, &old);
+}
+
 const char *svc_result_text(svc_result_t r)
 {
     switch (r) {
@@ -141,6 +200,7 @@ const char *svc_result_text(svc_result_t r)
     case SVC_ERR_BUSY:       return "Hazırlık / ışınlama sürerken ayar değişmez";
     case SVC_ERR_PARAM:      return "Geçersiz değer";
     case SVC_ERR_SAVE:       return "Kalıcı belleğe yazılamadı, ayar değişmedi";
+    case SVC_ERR_NO_EXPOSURE: return "Önce bu değerle tam süreli bir çekim yapın";
     }
     return "?";
 }
