@@ -233,7 +233,8 @@ tube_result_t tube_check(const tube_state_t *st, const exposure_params_t *p)
     if (p->kv < pr->kv_min) return TUBE_ERR_KV_LOW;
     if (p->kv > pr->kv_max || p->kv > FE_GEN_KV_MAX) return TUBE_ERR_KV_HIGH;
 
-    const float ma_abs = (p->focus == FOCUS_SMALL) ? pr->ma_max_small : pr->ma_max_large;
+    float ma_abs = (p->focus == FOCUS_SMALL) ? pr->ma_max_small : pr->ma_max_large;
+    if (ma_abs > FE_GEN_MA_MAX) ma_abs = FE_GEN_MA_MAX;   /* jeneratör sınırı */
     if (p->ma > ma_abs) return TUBE_ERR_MA_FOCUS_MAX;
 
     const float power = p->kv * p->ma;   /* kV * mA = W */
@@ -323,7 +324,7 @@ void tube_limits(const tube_state_t *st, focus_t focus, exp_mode_t mode, tube_li
     }
     out->kv_min = pr->kv_min;
     out->kv_max = minf(pr->kv_max, FE_GEN_KV_MAX);
-    out->ma_max = focus == FOCUS_SMALL ? pr->ma_max_small : pr->ma_max_large;
+    out->ma_max = minf(focus == FOCUS_SMALL ? pr->ma_max_small : pr->ma_max_large, FE_GEN_MA_MAX);
     out->time_max_ms = pr->rad_time_max_ms;
     out->power_max_w = minf(focus == FOCUS_SMALL ? pr->power_small_w : pr->power_large_w, gen);
 }

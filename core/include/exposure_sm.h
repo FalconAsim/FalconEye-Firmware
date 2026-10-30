@@ -112,6 +112,7 @@ typedef struct {
     bool wait_detector_enable;     /* senkron profil: ışınlamadan önce dedektör izni beklenir */
     bool fluoro_enabled;           /* floroskopi opsiyonu bu cihazda açık (servis menüsü) */
     bool dap_meter_enabled;        /* DAP metre takılı (servis menüsü); kapalıysa DAP'ı FalconXray hesaplar */
+    bool large_focus_off;          /* çift fokuslu insertte büyük fokus kullanılmıyor (servis menüsü) */
     float gen_power_max_w;         /* 0 = varsayılan (FE_GEN_POWER_MAX_W) */
     bool pc_link_required;         /* PC kontrol modu: bağlantı zorunlu, koparsa ışınlama kesilir */
     bool pc_link_serial;           /* PC bağlantısı RS-232 (Current); false = TGP */
@@ -191,7 +192,8 @@ typedef enum {
     SM_SET_OK = 0,
     SM_SET_BUSY,             /* ışınlama sürüyor */
     SM_SET_FOCUS_LOCKED,     /* hazırlıkta fokus / mod değiştirilemez (E213) */
-    SM_SET_FLUORO_DISABLED   /* floroskopi opsiyonu kapalı */
+    SM_SET_FLUORO_DISABLED,  /* floroskopi opsiyonu kapalı */
+    SM_SET_FOCUS_DISABLED    /* büyük fokus bu cihazda kullanılmıyor (servis menüsü) */
 } sm_set_result_t;
 
 sm_set_result_t sm_set_params_ex(exposure_sm_t *sm, const exposure_params_t *p);
@@ -200,6 +202,10 @@ bool sm_set_params(exposure_sm_t *sm, const exposure_params_t *p);   /* = ..._ex
 /* Floroskopi bu cihazda kullanılabilir mi: servis opsiyonu açık VE kurulu
  * insert floroskopiye uygun (çift fokuslu). */
 bool sm_fluoro_available(const exposure_sm_t *sm);
+
+/* Fokus bu cihazda seçilebilir mi: küçük fokus = insert çift fokuslu;
+ * büyük fokus = tek fokuslu insert veya servis menüsünde kapatılmamış. */
+bool sm_focus_available(const exposure_sm_t *sm, focus_t focus);
 
 /* Tek tuşla RAD <-> FLUORO geçişi (Asım, 26.10.2026). Her mod kendi son
  * değerlerini hatırlar; floroskopiye ilk geçişte küçük fokus, 50 kV, 2 mA,

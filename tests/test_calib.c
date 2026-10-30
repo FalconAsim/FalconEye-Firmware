@@ -9,12 +9,22 @@
 
 static int near(float a, float b, float tol) { return fabsf(a - b) <= tol; }
 
+/* Başlangıç tablosu: eski panelden ölçülen EP-REF / IP-REF (29.10.2026) */
 TEST(nominal_olcek)
 {
     calib_t c; calib_default(&c);
-    CHECK(near(calib_kv_ref_volts(&c, 110), 6.0f, 1e-4f), "110 kV = 6 V");
-    CHECK(near(calib_kv_ref_volts(&c, 70), 3.818f, 1e-3f), "70 kV = 3.82 V");
-    CHECK(near(calib_ma_ref_volts(&c, 70, 20), 2.4f, 1e-4f), "20 mA = 2.4 V");
+    CHECK(calib_valid(&c), "baslangic tablosu gecerli");
+    CHECK(near(calib_kv_ref_volts(&c, 40), 1.86f, 1e-4f), "40 kV = 1.86 V (olculen)");
+    CHECK(near(calib_kv_ref_volts(&c, 70), 3.45f, 1e-4f), "70 kV = 3.45 V (olculen)");
+    CHECK(near(calib_kv_ref_volts(&c, 100), 5.04f, 1e-4f), "100 kV = 5.04 V (olculen)");
+    CHECK(near(calib_kv_ref_volts(&c, 75), (3.45f + 3.98f) / 2, 1e-4f), "ara deger");
+    CHECK(near(calib_kv_ref_volts(&c, 110), 5.563f, 1e-3f), "110 kV dogrusal uzatma");
+    CHECK(near(calib_ma_ref_volts(&c, 60, 10), 4.725f, 1e-3f), "60 kV 10 mA = 4.72 V (olculen)");
+    CHECK(near(calib_ma_ref_volts(&c, 60, 2), 0.831f, 1e-3f), "60 kV 2 mA = 0.81 V (olculen)");
+    CHECK(calib_ma_ref_volts(&c, 100, 5) < calib_ma_ref_volts(&c, 70, 5) &&
+          calib_ma_ref_volts(&c, 70, 5) < calib_ma_ref_volts(&c, 40, 5), "kV artinca mA referansi duser");
+    CHECK(near(calib_ma_ref_volts(&c, 100, 5) / calib_ma_ref_volts(&c, 40, 5), 0.78f, 1e-3f), "100/40 kV orani 0.78");
+    CHECK(calib_ma_ref_volts(&c, 40, 15) <= 6.0f, "DAC tavani 6 V");
     CHECK(near(calib_kv_from_fb(&c, 3.0f), 55.0f, 1e-3f), "FB 3 V = 55 kV");
     CHECK(near(calib_ma_from_fb(&c, 1.2f), 10.0f, 1e-3f), "FB 1.2 V = 10 mA");
 }
@@ -53,7 +63,7 @@ TEST(gecersiz_tablo_reddi)
     c.kv_to_v.y[1] = 7.0f;
     CHECK(!calib_valid(&c), "6 V ustu referans reddedilir");
     calib_default(&c);
-    c.kv_to_v.n = 3; c.kv_to_v.x[2] = 50.0f; c.kv_to_v.y[2] = 6.0f;
+    c.kv_to_v.n = 3; c.kv_to_v.x[2] = 30.0f; c.kv_to_v.y[2] = 6.0f;
     CHECK(!calib_valid(&c), "x azalan reddedilir");
     calib_default(&c);
     c.kvfb_v_to_kv.y[1] = NAN;
@@ -65,8 +75,9 @@ TEST(ma_kv_bagimli)
     calib_t c; calib_default(&c);
     c.ma.rows = 2;
     c.ma.kv[0] = 50; c.ma.kv[1] = 90;
-    c.ma.ma_to_v[1] = c.ma.ma_to_v[0];
-    c.ma.ma_to_v[0].y[1] = 6.0f;            /* 50 kV: nominal */
+    cal_curve_t two = { .n = 2, .x = { 0.0f, 50.0f }, .y = { 0.0f, 6.0f } };
+    c.ma.ma_to_v[0] = two;                  /* 50 kV */
+    c.ma.ma_to_v[1] = two;
     c.ma.ma_to_v[1].y[1] = 5.4f;            /* 90 kV: uzay yuku etkisi, daha az flaman */
     const float v50 = calib_ma_ref_volts(&c, 50, 25);
     const float v90 = calib_ma_ref_volts(&c, 90, 25);

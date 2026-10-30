@@ -13,10 +13,36 @@ static void line2(cal_curve_t *k, float x0, float y0, float x1, float y1)
 void calib_default(calib_t *c)
 {
     memset(c, 0, sizeof(*c));
-    line2(&c->kv_to_v, 0.0f, 0.0f, FE_KV_FULL_SCALE, FE_REF_FULL_SCALE_V);
-    c->ma.rows = 1;
-    c->ma.kv[0] = 70.0f;
-    line2(&c->ma.ma_to_v[0], 0.0f, 0.0f, FE_MA_FULL_SCALE, FE_REF_FULL_SCALE_V);
+    /* EP-REF: eski panelden ölçülen (Asım, 29.10.2026). 40-100 kV doğrusal,
+     * V = 0,05293 kV - 0,259. 4,9 kV = 0 V (doğrunun sıfırı); 110 kV doğrusal
+     * uzatma (eski panel 100 kV'de sınırlıydı, ölçülmedi). */
+    static const float kv_x[] = { 4.9f, 40, 50, 60, 70, 80, 90, 100, 110 };
+    static const float kv_y[] = { 0.0f, 1.86f, 2.38f, 2.92f, 3.45f, 3.98f, 4.49f, 5.04f, 5.563f };
+    c->kv_to_v.n = (uint8_t)(sizeof kv_x / sizeof kv_x[0]);
+    for (uint8_t i = 0; i < c->kv_to_v.n; i++) { c->kv_to_v.x[i] = kv_x[i]; c->kv_to_v.y[i] = kv_y[i]; }
+
+    /* IP-REF: DF-161SBR küçük fokus, 60 kV'de ölçülen (1, 2, 3, 4, 10 mA):
+     * V = 0,4867 mA - 0,142. Eski panel aynı mA için kV arttıkça referansı
+     * düşürüyor (uzay yükü düzeltmesi; 40/70/100 kV oranı 1 / 0,875 / 0,78).
+     * Satırlar 60 kV doğrusunun bu oranlarla ölçeklenmiş hali; kesin değerler
+     * ışınlamalı mA kalibrasyonuyla. Tablo 6 V'u (DAC tavanı) aşmayacak
+     * şekilde 12 mA'de biter. */
+    static const float row_kv[] = { 40, 60, 70, 100 };
+    static const float row_k[]  = { 1.0f / 0.9167f, 1.0f, 0.875f / 0.9167f, 0.78f / 0.9167f };
+    static const float ma_x[]   = { 0.29f, 1, 2, 3, 4, 10, 12 };
+    c->ma.rows = 4;
+    for (uint8_t r = 0; r < 4; r++) {
+        c->ma.kv[r] = row_kv[r];
+        cal_curve_t *k = &c->ma.ma_to_v[r];
+        k->n = (uint8_t)(sizeof ma_x / sizeof ma_x[0]);
+        for (uint8_t i = 0; i < k->n; i++) {
+            float v = (0.4867f * ma_x[i] - 0.142f) * row_k[r];
+            if (v < 0.0f) v = 0.0f;
+            if (v > CAL_REF_MAX_V) v = CAL_REF_MAX_V;
+            k->x[i] = ma_x[i];
+            k->y[i] = v;
+        }
+    }
     line2(&c->kvfb_v_to_kv, 0.0f, 0.0f, FE_REF_FULL_SCALE_V, FE_KV_FULL_SCALE);
     line2(&c->mafb_v_to_ma, 0.0f, 0.0f, FE_REF_FULL_SCALE_V, FE_MA_FULL_SCALE);
 }

@@ -37,7 +37,8 @@ typedef struct {
     /* --- sürüm 2 --- */
     uint8_t tube_insert;        /* tube_insert_t: kurulu insert (servis menüsü) */
     uint8_t dap_meter_enabled;  /* DAP metre takılı (insan versiyonu); veterinerde 0 */
-    uint8_t reserved[6];
+    uint8_t large_focus_off;    /* çift fokuslu insertte büyük fokus kullanılmıyor (varsayılan 1) */
+    uint8_t reserved[5];
 } nv_settings_t;
 
 typedef struct {

@@ -90,7 +90,7 @@ Jeneratör alarmı, kV/mA tolerans, yedek zamanlayıcı, acil stop --> HATA (ona
 
 ## Kalibrasyon ve kalıcı saklama
 
-- Kalibrasyonsuz cihaz nominal ölçekle çalışır (6 V = 110 kV, 6 V = 50 mA). kVp metre ve mAs metre ölçümleri girildikçe çok noktalı tablolar devreye girer (en fazla 16 nokta; mA tablosu 4 kV satırına kadar kV'ye bağlı).
+- Kalibrasyonsuz cihaz **eski panelden ölçülen** referans tablosuyla çalışır (29.10.2026, DF-161SBR küçük fokus): EP-REF 40–100 kV, V = 0,0529·kV − 0,26; IP-REF 60 kV'de V = 0,487·mA − 0,14, kV satırları 40/60/70/100 (eski panelin uzay yükü düzeltmesi: 100 kV'de 40 kV'nin %78'i). Feedback ölçeği hâlâ nominal (6 V = 110 kV, 6 V = 50 mA). kVp metre ve mAs metre ölçümleri girildikçe çok noktalı tablolar devreye girer (en fazla 16 nokta; mA tablosu 4 kV satırına kadar kV'ye bağlı).
 - DAC: 3.0 V referans × 2 kazanç = 6.0 V tavan. NaN veya aralık dışı değer 0 V'a çekilir.
 - FRAM'de iki kopya, sıra numarası ve CRC32. Yazma sırasında güç kesilirse diğer kopya kullanılır; geçersiz kalibrasyon tablosu hiç yazılmaz.
 
@@ -138,7 +138,7 @@ Kurulu insert servis menüsünden seçilir (`tube_select`); `LIMITS?` ve `VERSIO
 
 | Insert | Fokus | kV | En yüksek mA | Anot | Görev çevrimi | Floroskopi |
 |---|---|---|---|---|---|---|
-| Canon DF-161SBR (varsayılan) | 1,6 / 0,5 | 40–125 (jeneratör 110) | 60 / 15 | 35,5 kJ, 600 W | 1:40 / 1:20 | Küçük fokus, 40–60 kV, 600 W, 20 s |
+| Canon DF-161SBR (varsayılan) | 1,6 / 0,5 | 40–125 (jeneratör sınırı **100**) | 60 (jeneratör **50**) / 15 | 35,5 kJ, 600 W | 1:40 / 1:20 | Küçük fokus, 40–60 kV, 600 W, 20 s |
 | Canon D-067SB | 0,6 | 50–100 | 22 | 35 kJ, 250 W | 1:60 | Yok |
 | Canon D-023 | 0,2 | 50–100 | 4,3 | 35 kJ, 250 W | 1:60 | Yok |
 | CEI OX/105-4 | 2,6 | 50–110 | 50 (jeneratör) | 30 kJ, 250 W | 1:40 (varsayım) | Yok |
@@ -170,5 +170,7 @@ Kurulu insert servis menüsünden seçilir (`tube_select`); `LIMITS?` ve `VERSIO
 - **DAP metre**: servis menüsünden açılır/kapanır (`svc_set_dap_meter`). Açıkken HAL metre okumasını `sm_record_dap` ile kayda yazar, kart `DONE`'dan sonra `DOSE` satırı gönderir; okuma gelmezse **W603**. **Veteriner versiyonunda kapalı**: kart DAP göndermez, DAP'ı FalconXray hesaplar. Metre arayüzü (muhtemelen J14 RS-485) seçilecek.
 - **Insert seçimi**: servis menüsünden (`svc_set_insert`); açılış değerleri yeni insertin sınırlarına göre yüklenir. **Isı modeli sıfırlanmaz**: insert değiştirmek sıcak tüpün ısı kaydını silmenin yolu olmasın.
 - Servis moduna yalnız panelden PIN ile girilir (TGP'den girilemez); 3 yanlış PIN → 60 s kilit; 10 dk işlemsiz kalırsa kapanır. Ayar yalnız hazırlık / ışınlama dışında değişir; FRAM'e yazılıp geri okunur, yazılamazsa geri alınır.
-- FRAM kayıt sürümü 2 (insert, DAP metre). Sürüm 1 (v0.8) kaydı kalibrasyon korunarak okunur ve dönüştürülür.
+- **Büyük fokus** (çift fokuslu insertte): servis menüsünden açılır/kapanır (`svc_set_large_focus`); **varsayılan kapalı** — cihaz DF-161SBR ile yalnız küçük fokusta çalışıyor (Asım, 29.10.2026). Kapalıyken `LIMITS`'te `FO=L` satırı yok, `SET FO=L` → `NAK E906`.
+- **kV üst sınırı 100** (`FE_GEN_KV_MAX`): eski panel 100 kV'de sınırlıydı; 100 kV üstü kVp metre doğrulaması ve üretici onayıyla açılır.
+- FRAM kayıt sürümü 2 (insert, DAP metre, büyük fokus). Sürüm 1 (v0.8) kaydı kalibrasyon korunarak okunur ve dönüştürülür.
 - Açık: servis PIN'inin kaynağı (cihaza özel, seri numarasından türetme önerilir).

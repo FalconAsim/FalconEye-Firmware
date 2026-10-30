@@ -166,6 +166,17 @@ TEST(ayar_reddi)
     CHECK(line_has(a, 1, "ACTUAL KV=55.0 MA=3 MS=20000 MAS=60.00 FO=S MODE=FLUORO"), "floroskopi son degerleri hatirlandi");
 }
 
+TEST(buyuk_fokus_kapali_ve_100kv)
+{
+    setup();
+    sm.cfg.large_focus_off = true;
+    const char *a = cmd("LIMITS?");
+    CHECK(valid_lines(a) == 1 && line_has(a, 0, "LIMITS TUBE=DF-161SBR MODE=RAD FO=S KV=40.0-100.0"), "yalniz FO=S satiri");
+    CHECK(line_has(cmd("SET KV=70.0 MA=5 MS=100 FO=L"), 0, "NAK 0002 E906"), "buyuk fokus kapali -> E906");
+    CHECK(line_has(cmd("SET KV=105.0 MA=2 MS=100 FO=S"), 0, "NAK 0003 E202"), "100 kV ustu -> E202");
+    CHECK(line_has(cmd("SET KV=100.0 MA=5 MS=100 FO=S"), 0, "ACK"), "100 kV kabul");
+}
+
 TEST(opsiyonlar_ve_doz)
 {
     setup();
@@ -327,9 +338,9 @@ TEST(sinir_bildirimi)
     setup();
     const char *a = cmd("LIMITS?");
     CHECK(valid_lines(a) == 2, "floroskopi kapali: 2 satir");
-    CHECK(line_has(a, 0, "LIMITS TUBE=DF-161SBR MODE=RAD FO=L KV=40.0-110.0 MA=1-60 MS=1-10000 P=3200"),
+    CHECK(line_has(a, 0, "LIMITS TUBE=DF-161SBR MODE=RAD FO=L KV=40.0-100.0 MA=1-50 MS=1-10000 P=3200"),
           "buyuk fokus satiri");
-    CHECK(line_has(a, 1, "LIMITS TUBE=DF-161SBR MODE=RAD FO=S KV=40.0-110.0 MA=1-15 MS=1-10000 P=720"),
+    CHECK(line_has(a, 1, "LIMITS TUBE=DF-161SBR MODE=RAD FO=S KV=40.0-100.0 MA=1-15 MS=1-10000 P=720"),
           "kucuk fokus satiri");
     sm.cfg.fluoro_enabled = true;
     a = cmd("LIMITS?");
@@ -400,6 +411,7 @@ int main(void)
     RUN(mas_teknigi);
     RUN(ayar_reddi);
     RUN(opsiyonlar_ve_doz);
+    RUN(buyuk_fokus_kapali_ve_100kv);
     RUN(pc_manuel_modu);
     RUN(isinlama_sirasinda_ayar_degismez);
     RUN(hazirlikta_set);
