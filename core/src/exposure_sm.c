@@ -197,6 +197,8 @@ static void finish_exposure(exposure_sm_t *sm, end_reason_t reason)
     r->reason = reason;
     r->cut = reason == END_LINK_LOST || reason == END_LINK_LOST_SERIAL;
     r->dap_valid = false;      /* DAP metre okuması sonra gelir (sm_record_dap) */
+    r->cal_kv_used = false;
+    r->cal_ma_used = false;
     r->dap_dgycm2 = 0.0f;
     r->valid = true;
 

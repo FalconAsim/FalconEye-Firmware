@@ -270,6 +270,30 @@ cal_result_t calib_correct_ma(calib_t *c, int focus, float set_kv, float set_ma,
     return r;
 }
 
+float calib_curve_inverse(const cal_curve_t *k, float y)
+{
+    if (k->n < 2) return 0.0f;
+    uint8_t i = 0;
+    while (i < k->n - 2 && y > k->y[i + 1]) i++;
+    const float dy = k->y[i + 1] - k->y[i];
+    if (dy <= 0.0f) return k->x[i];
+    return k->x[i] + (k->x[i + 1] - k->x[i]) * (y - k->y[i]) / dy;
+}
+
+cal_result_t calib_learn_fb(cal_curve_t *k, float fb_volts, float measured)
+{
+    if (!(fb_volts > 0.05f) || !(measured > 0.0f)) return CAL_ERR_PARAM;
+    cal_curve_t t = *k;
+    bool replaced = false;
+    for (uint8_t i = 0; i < t.n; i++) {
+        if (absf(t.x[i] - fb_volts) <= 0.02f) { t.x[i] = fb_volts; t.y[i] = measured; replaced = true; break; }
+    }
+    if (!replaced && !calib_curve_set_point(&t, fb_volts, measured)) return CAL_ERR_FULL;
+    if (!calib_curve_valid(&t, 0.0f, 200.0f)) return CAL_ERR_MONOTONIC;
+    *k = t;
+    return CAL_OK;
+}
+
 const char *calib_result_text(cal_result_t r)
 {
     switch (r) {

@@ -147,32 +147,51 @@ static svc_result_t commit_cal(svc_t *svc, const calib_t *old)
     return SVC_ERR_SAVE;
 }
 
-svc_result_t svc_cal_kv(svc_t *svc, float measured_kv, cal_result_t *res, float *v_new)
+svc_result_t svc_cal_kv(svc_t *svc, float measured_kv, cal_result_t *res, cal_result_t *fb_res, float *v_new)
 {
     const svc_result_t r = pre(svc);
     if (r != SVC_OK) return r;
     if (!last_exposure_ok(svc->sm)) return SVC_ERR_NO_EXPOSURE;
+    if (svc->sm->last_record.cal_kv_used) return SVC_ERR_ALREADY_USED;
     const float set = svc->sm->last_record.set.kv;
     const calib_t old = svc->data->calib;
+    /* feedback: çekimde ölçülen ortalama kV → o anki tablonun tersiyle gerilim */
+    cal_result_t fr = CAL_ERR_PARAM;
+    if (svc->sm->last_record.kv_avg > 0.0f) {
+        const float fb_v = calib_curve_inverse(&svc->data->calib.kvfb_v_to_kv, svc->sm->last_record.kv_avg);
+        fr = calib_learn_fb(&svc->data->calib.kvfb_v_to_kv, fb_v, measured_kv);
+    }
+    if (fb_res) *fb_res = fr;
     const cal_result_t cr = calib_correct_kv(&svc->data->calib, set, measured_kv,
                                              maxf2(SVC_CAL_KV_TOL_ABS, SVC_CAL_KV_TOL_FRAC * set), v_new);
     if (res) *res = cr;
-    if (cr != CAL_OK && cr != CAL_IN_TOL) return SVC_ERR_PARAM;
-    return commit_cal(svc, &old);
+    if (cr != CAL_OK && cr != CAL_IN_TOL) { svc->data->calib = old; return SVC_ERR_PARAM; }
+    const svc_result_t c = commit_cal(svc, &old);
+    if (c == SVC_OK) svc->sm->last_record.cal_kv_used = true;
+    return c;
 }
 
-svc_result_t svc_cal_ma(svc_t *svc, float measured_ma, cal_result_t *res, float *v_new)
+svc_result_t svc_cal_ma(svc_t *svc, float measured_ma, cal_result_t *res, cal_result_t *fb_res, float *v_new)
 {
     const svc_result_t r = pre(svc);
     if (r != SVC_OK) return r;
     if (!last_exposure_ok(svc->sm)) return SVC_ERR_NO_EXPOSURE;
+    if (svc->sm->last_record.cal_ma_used) return SVC_ERR_ALREADY_USED;
     const exposure_params_t *p = &svc->sm->last_record.set;
     const calib_t old = svc->data->calib;
+    cal_result_t fr = CAL_ERR_PARAM;
+    if (svc->sm->last_record.ma_avg > 0.0f) {
+        const float fb_v = calib_curve_inverse(&svc->data->calib.mafb_v_to_ma, svc->sm->last_record.ma_avg);
+        fr = calib_learn_fb(&svc->data->calib.mafb_v_to_ma, fb_v, measured_ma);
+    }
+    if (fb_res) *fb_res = fr;
     const cal_result_t cr = calib_correct_ma(&svc->data->calib, (int)p->focus, p->kv, p->ma, measured_ma,
                                              maxf2(SVC_CAL_MA_TOL_ABS, SVC_CAL_MA_TOL_FRAC * p->ma), v_new);
     if (res) *res = cr;
-    if (cr != CAL_OK && cr != CAL_IN_TOL) return SVC_ERR_PARAM;
-    return commit_cal(svc, &old);
+    if (cr != CAL_OK && cr != CAL_IN_TOL) { svc->data->calib = old; return SVC_ERR_PARAM; }
+    const svc_result_t c = commit_cal(svc, &old);
+    if (c == SVC_OK) svc->sm->last_record.cal_ma_used = true;
+    return c;
 }
 
 svc_result_t svc_cal_reset(svc_t *svc, bool kv, bool ma)
@@ -182,9 +201,13 @@ svc_result_t svc_cal_reset(svc_t *svc, bool kv, bool ma)
     const calib_t old = svc->data->calib;
     calib_t def;
     calib_default(&def);
-    if (kv) { svc->data->calib.kv_to_v = def.kv_to_v; svc->data->calib.done &= (uint8_t)~CAL_DONE_KV; }
+    if (kv) {
+        svc->data->calib.kv_to_v = def.kv_to_v; svc->data->calib.kvfb_v_to_kv = def.kvfb_v_to_kv;
+        svc->data->calib.done &= (uint8_t)~CAL_DONE_KV;
+    }
     if (ma) {
         svc->data->calib.ma[0] = def.ma[0]; svc->data->calib.ma[1] = def.ma[1];
+        svc->data->calib.mafb_v_to_ma = def.mafb_v_to_ma;
         svc->data->calib.done &= (uint8_t)~(CAL_DONE_MA_LARGE | CAL_DONE_MA_SMALL);
     }
     return commit_cal(svc, &old);
@@ -201,6 +224,7 @@ const char *svc_result_text(svc_result_t r)
     case SVC_ERR_PARAM:      return "Geçersiz değer";
     case SVC_ERR_SAVE:       return "Kalıcı belleğe yazılamadı, ayar değişmedi";
     case SVC_ERR_NO_EXPOSURE: return "Önce bu değerle tam süreli bir çekim yapın";
+    case SVC_ERR_ALREADY_USED: return "Bu çekimin ölçümü girildi – yeni çekim yapın";
     }
     return "?";
 }

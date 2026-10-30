@@ -134,4 +134,13 @@ cal_result_t calib_correct_ma(calib_t *c, int focus, float set_kv, float set_ma,
                               float tol_ma, float *v_new);
 const char *calib_result_text(cal_result_t r);
 
+/* --- Feedback kalibrasyonu (EP-MON / IP-MON → gerçek kV / mA) ---
+ * Aynı çekimde, ölçüm cihazının okuması ile çekim sırasında ölçülen feedback
+ * geriliminin ortalaması eşleştirilir: (V_fb, ölçülen) noktası feedback
+ * tablosuna yazılır. Çekim kaydı kV/mA cinsinden tutulduğu için V_fb, kayıt
+ * anındaki tablo tersinden bulunur (calib_curve_inverse). Aynı gerilime çok
+ * yakın (≤ 20 mV) nokta varsa güncellenir. Tablo monoton kalmalı. */
+float calib_curve_inverse(const cal_curve_t *k, float y);
+cal_result_t calib_learn_fb(cal_curve_t *k, float fb_volts, float measured);
+
 #endif

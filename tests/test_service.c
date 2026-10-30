@@ -177,6 +177,8 @@ static void fake_exposure(float kv, float ma, focus_t f)
     sm.last_record.reason = END_TIME_DONE;
     sm.last_record.set.kv = kv; sm.last_record.set.ma = ma; sm.last_record.set.time_ms = 100u;
     sm.last_record.set.focus = f; sm.last_record.set.mode = MODE_RADIOGRAPHY;
+    sm.last_record.kv_avg = 0.0f; sm.last_record.ma_avg = 0.0f;
+    sm.last_record.cal_kv_used = false; sm.last_record.cal_ma_used = false;
 }
 
 static int nearf(float a, float b, float t) { return (a > b ? a - b : b - a) <= t; }
@@ -185,27 +187,30 @@ TEST(kv_kalibrasyonu)
 {
     fresh();
     cal_result_t cr; float v;
-    CHECK(svc_cal_kv(&svc, 70.0f, &cr, &v) == SVC_ERR_NOT_ACTIVE, "servis modu gerekli");
+    CHECK(svc_cal_kv(&svc, 70.0f, &cr, NULL, &v) == SVC_ERR_NOT_ACTIVE, "servis modu gerekli");
     svc_enter(&svc, PIN);
     sm.last_record.valid = false;
-    CHECK(svc_cal_kv(&svc, 70.0f, &cr, &v) == SVC_ERR_NO_EXPOSURE, "once cekim");
+    CHECK(svc_cal_kv(&svc, 70.0f, &cr, NULL, &v) == SVC_ERR_NO_EXPOSURE, "once cekim");
     fake_exposure(70.0f, 5.0f, FOCUS_SMALL);
     sm.last_record.reason = END_RELEASED;
-    CHECK(svc_cal_kv(&svc, 68.0f, &cr, &v) == SVC_ERR_NO_EXPOSURE, "yarida kesilen cekim kabul edilmez");
+    CHECK(svc_cal_kv(&svc, 68.0f, &cr, NULL, &v) == SVC_ERR_NO_EXPOSURE, "yarida kesilen cekim kabul edilmez");
     fake_exposure(70.0f, 5.0f, FOCUS_SMALL);
     const float v0 = calib_kv_ref_volts(&data.calib, 70.0f);
-    CHECK(svc_cal_kv(&svc, 68.0f, &cr, &v) == SVC_OK && cr == CAL_OK, "68 olculdu: nokta duzeltildi");
+    CHECK(svc_cal_kv(&svc, 68.0f, &cr, NULL, &v) == SVC_OK && cr == CAL_OK, "68 olculdu: nokta duzeltildi");
     CHECK(v > v0 && nearf(v, v0 + 2.0f * 0.053f, 0.01f), "referans yukseldi (egimle)");
-    CHECK(svc_cal_kv(&svc, 69.8f, &cr, &v) == SVC_OK && cr == CAL_IN_TOL, "tolerans icinde: dogrulandi");
+    CHECK(svc_cal_kv(&svc, 69.0f, &cr, NULL, &v) == SVC_ERR_ALREADY_USED, "ayni cekim icin ikinci giris reddedilir");
+    fake_exposure(70.0f, 5.0f, FOCUS_SMALL);
+    CHECK(svc_cal_kv(&svc, 69.8f, &cr, NULL, &v) == SVC_OK && cr == CAL_IN_TOL, "tolerans icinde: dogrulandi");
     CHECK(data.calib.done & CAL_DONE_KV, "kV kalibrasyon isareti");
     const float vk = calib_kv_ref_volts(&data.calib, 70.0f);
     boot();
     CHECK(nearf(calib_kv_ref_volts(&data.calib, 70.0f), vk, 1e-5f), "FRAM'e yazildi, acilista geri geldi");
     svc_enter(&svc, PIN); fake_exposure(70.0f, 5.0f, FOCUS_SMALL);
-    CHECK(svc_cal_kv(&svc, 40.0f, &cr, &v) == SVC_ERR_PARAM && cr == CAL_ERR_STEP, "%30 ustu fark: olcum hatasi supesi, tablo degismez");
+    CHECK(svc_cal_kv(&svc, 40.0f, &cr, NULL, &v) == SVC_ERR_PARAM && cr == CAL_ERR_STEP, "%30 ustu fark: olcum hatasi supesi, tablo degismez");
     CHECK(nearf(calib_kv_ref_volts(&data.calib, 70.0f), vk, 1e-5f), "tablo degismedi");
     const float vb = calib_kv_ref_volts(&data.calib, 70.0f);
-    CHECK(svc_cal_kv(&svc, 60.0f, &cr, &v) == SVC_OK && nearf(v, vb * 1.10f, 0.002f), "tek adimda en cok %10");
+    fake_exposure(70.0f, 5.0f, FOCUS_SMALL);
+    CHECK(svc_cal_kv(&svc, 60.0f, &cr, NULL, &v) == SVC_OK && nearf(v, vb * 1.10f, 0.002f), "tek adimda en cok %10");
 }
 
 TEST(ma_kalibrasyonu_fokus_basina)
@@ -216,25 +221,49 @@ TEST(ma_kalibrasyonu_fokus_basina)
     const float vl0 = calib_ma_ref_volts(&data.calib, CAL_FOCUS_LARGE, 70.0f, 40.0f);
     fake_exposure(60.0f, 4.0f, FOCUS_SMALL);
     const float vs0 = calib_ma_ref_volts(&data.calib, CAL_FOCUS_SMALL, 60.0f, 4.0f);
-    CHECK(svc_cal_ma(&svc, 3.6f, &cr, &v) == SVC_OK && cr == CAL_OK && v > vs0, "kucuk fokus 4 mA: duzeltildi");
+    CHECK(svc_cal_ma(&svc, 3.6f, &cr, NULL, &v) == SVC_OK && cr == CAL_OK && v > vs0, "kucuk fokus 4 mA: duzeltildi");
     CHECK(nearf(calib_ma_ref_volts(&data.calib, CAL_FOCUS_LARGE, 70.0f, 40.0f), vl0, 1e-6f), "buyuk fokus tablosu etkilenmedi");
     fake_exposure(70.0f, 40.0f, FOCUS_LARGE);
-    CHECK(svc_cal_ma(&svc, 37.0f, &cr, &v) == SVC_OK && cr == CAL_OK, "buyuk fokus 40 mA: duzeltildi");
-    CHECK(svc_cal_ma(&svc, 39.5f, &cr, &v) == SVC_OK && cr == CAL_IN_TOL && (data.calib.done & CAL_DONE_MA_LARGE), "buyuk fokus dogrulandi");
+    CHECK(svc_cal_ma(&svc, 37.0f, &cr, NULL, &v) == SVC_OK && cr == CAL_OK, "buyuk fokus 40 mA: duzeltildi");
+    fake_exposure(70.0f, 40.0f, FOCUS_LARGE);
+    CHECK(svc_cal_ma(&svc, 39.5f, &cr, NULL, &v) == SVC_OK && cr == CAL_IN_TOL && (data.calib.done & CAL_DONE_MA_LARGE), "buyuk fokus dogrulandi");
     fake_exposure(80.0f, 4.0f, FOCUS_SMALL);
-    CHECK(svc_cal_ma(&svc, 3.8f, &cr, &v) == SVC_ERR_PARAM && cr == CAL_ERR_FULL, "kucuk fokusta 4 kV satiri dolu (40/60/70/100)");
+    CHECK(svc_cal_ma(&svc, 3.8f, &cr, NULL, &v) == SVC_ERR_PARAM && cr == CAL_ERR_FULL, "kucuk fokusta 4 kV satiri dolu (40/60/70/100)");
     fake_exposure(80.0f, 30.0f, FOCUS_LARGE);
-    CHECK(svc_cal_ma(&svc, 29.0f, &cr, &v) == SVC_OK && data.calib.ma[CAL_FOCUS_LARGE].rows == 2, "buyuk fokusta yeni kV satiri (80) eklendi");
+    CHECK(svc_cal_ma(&svc, 29.0f, &cr, NULL, &v) == SVC_OK && data.calib.ma[CAL_FOCUS_LARGE].rows == 2, "buyuk fokusta yeni kV satiri (80) eklendi");
     fake_exposure(60.0f, 10.0f, FOCUS_SMALL);
-    CHECK(svc_cal_ma(&svc, 8.0f, &cr, &v) == SVC_ERR_PARAM && cr == CAL_ERR_LIMIT, "kucuk fokus tam skalasi (5,0 V) asilamaz");
+    CHECK(svc_cal_ma(&svc, 8.0f, &cr, NULL, &v) == SVC_ERR_PARAM && cr == CAL_ERR_LIMIT, "kucuk fokus tam skalasi (5,0 V) asilamaz");
+    fake_exposure(60.0f, 10.0f, FOCUS_SMALL);
     CHECK(svc_cal_reset(&svc, false, true) == SVC_OK && data.calib.ma[CAL_FOCUS_LARGE].rows == 1 && !(data.calib.done & CAL_DONE_MA_LARGE),
           "mA tablolari baslangica dondu");
     fail_write = true;
     fake_exposure(60.0f, 4.0f, FOCUS_SMALL);
     const float vb = calib_ma_ref_volts(&data.calib, CAL_FOCUS_SMALL, 60.0f, 4.0f);
-    CHECK(svc_cal_ma(&svc, 3.6f, &cr, &v) == SVC_ERR_SAVE, "FRAM yazilamadi");
+    CHECK(svc_cal_ma(&svc, 3.6f, &cr, NULL, &v) == SVC_ERR_SAVE, "FRAM yazilamadi");
     CHECK(nearf(calib_ma_ref_volts(&data.calib, CAL_FOCUS_SMALL, 60.0f, 4.0f), vb, 1e-6f), "tablo geri alindi");
     fail_write = false;
+}
+
+TEST(feedback_kalibrasyonu)
+{
+    fresh();
+    svc_enter(&svc, PIN);
+    cal_result_t cr, fr; float v;
+    fake_exposure(70.0f, 5.0f, FOCUS_SMALL);
+    sm.last_record.kv_avg = 0.0f;   /* MEAS=0: EP-MON bağlı değil */
+    CHECK(svc_cal_kv(&svc, 68.0f, &cr, &fr, &v) == SVC_OK && fr == CAL_ERR_PARAM, "feedback yoksa yalniz DAC duzeltilir");
+    fake_exposure(70.0f, 5.0f, FOCUS_SMALL);
+    sm.last_record.kv_avg = 69.0f;  /* kart feedback'i 69 kV sandı, kVp metre 68 */
+    const float fb_v = calib_curve_inverse(&data.calib.kvfb_v_to_kv, 69.0f);
+    CHECK(svc_cal_kv(&svc, 68.0f, &cr, &fr, &v) == SVC_OK && fr == CAL_OK, "kV feedback noktasi ogrenildi");
+    CHECK(nearf(calib_kv_from_fb(&data.calib, fb_v), 68.0f, 0.01f), "ayni feedback gerilimi artik 68 kV okunuyor");
+    fake_exposure(60.0f, 4.0f, FOCUS_SMALL);
+    sm.last_record.ma_avg = 4.3f;
+    const float fbm = calib_curve_inverse(&data.calib.mafb_v_to_ma, 4.3f);
+    CHECK(svc_cal_ma(&svc, 3.9f, &cr, &fr, &v) == SVC_OK && fr == CAL_OK, "mA feedback noktasi ogrenildi");
+    CHECK(nearf(calib_ma_from_fb(&data.calib, fbm), 3.9f, 0.01f), "IP-MON gerilimi artik 3,9 mA");
+    boot();
+    CHECK(nearf(calib_kv_from_fb(&data.calib, fb_v), 68.0f, 0.01f), "feedback tablosu FRAM'de");
 }
 
 int main(void)
@@ -250,5 +279,6 @@ int main(void)
     RUN(kayit_hatasi_geri_alinir);
     RUN(kv_kalibrasyonu);
     RUN(ma_kalibrasyonu_fokus_basina);
+    RUN(feedback_kalibrasyonu);
     return REPORT();
 }
