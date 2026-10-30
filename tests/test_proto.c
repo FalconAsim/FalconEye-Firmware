@@ -338,7 +338,7 @@ TEST(sinir_bildirimi)
     setup();
     const char *a = cmd("LIMITS?");
     CHECK(valid_lines(a) == 2, "floroskopi kapali: 2 satir");
-    CHECK(line_has(a, 0, "LIMITS TUBE=DF-161SBR MODE=RAD FO=L KV=40.0-100.0 MA=1-60 MS=1-10000 P=3200"),
+    CHECK(line_has(a, 0, "LIMITS TUBE=DF-161SBR MODE=RAD FO=L KV=40.0-100.0 MA=1-50 MS=1-10000 P=3200"),
           "buyuk fokus satiri");
     CHECK(line_has(a, 1, "LIMITS TUBE=DF-161SBR MODE=RAD FO=S KV=40.0-100.0 MA=1-15 MS=1-10000 P=720"),
           "kucuk fokus satiri");

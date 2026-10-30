@@ -138,7 +138,7 @@ Kurulu insert servis menüsünden seçilir (`tube_select`); `LIMITS?` ve `VERSIO
 
 | Insert | Fokus | kV | En yüksek mA | Anot | Görev çevrimi | Floroskopi |
 |---|---|---|---|---|---|---|
-| Canon DF-161SBR (varsayılan) | 1,6 / 0,5 | 40–125 (jeneratör sınırı **100**) | 60 / 15 | 35,5 kJ, 600 W | 1:40 / 1:20 | Küçük fokus, 40–60 kV, 600 W, 20 s |
+| Canon DF-161SBR (varsayılan) | 1,6 / 0,5 | 40–125 (jeneratör sınırı **100**) | 60 (jeneratör **50**) / 15 | 35,5 kJ, 600 W | 1:40 / 1:20 | Küçük fokus, 40–60 kV, 600 W, 20 s |
 | Canon D-067SB | 0,6 | 50–100 | 22 | 35 kJ, 250 W | 1:60 | Yok |
 | Canon D-023 | 0,2 | 50–100 | 4,3 | 35 kJ, 250 W | 1:60 | Yok |
 | CEI OX/105-4 | 2,6 | 50–110 | 50 (jeneratör) | 30 kJ, 250 W | 1:40 (varsayım) | Yok |

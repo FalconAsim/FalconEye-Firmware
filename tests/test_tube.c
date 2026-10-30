@@ -137,6 +137,14 @@ TEST(insert_secimi)
     }
 }
 
+TEST(jenerator_akim_siniri)
+{
+    CHECK(chk(TUBE_INSERT_DF161SBR, 50, 55, 10, FOCUS_LARGE, MODE_RADIOGRAPHY) == TUBE_ERR_MA_FOCUS_MAX, "DF-161SBR buyuk fokus 55 mA > 50 mA jenerator siniri");
+    CHECK(chk(TUBE_INSERT_DF161SBR, 50, 50, 10, FOCUS_LARGE, MODE_RADIOGRAPHY) == TUBE_OK, "50 mA kabul");
+    tube_state_t st; tube_init(&st); tube_limits_t l; tube_limits(&st, FOCUS_LARGE, MODE_RADIOGRAPHY, &l);
+    CHECK(l.ma_max == 50.0f, "LIMITS buyuk fokus en cok 50 mA");
+}
+
 TEST(tek_fokuslu_insertler)
 {
     CHECK(chk(TUBE_INSERT_D067SB, 70, 5, 100, FOCUS_SMALL, MODE_RADIOGRAPHY) == TUBE_ERR_NO_SMALL_FOCUS, "D-067SB kucuk fokus yok");
@@ -203,6 +211,7 @@ int main(void)
     RUN(gorev_dongusu);
     RUN(anot_isi_modeli);
     RUN(insert_secimi);
+    RUN(jenerator_akim_siniri);
     RUN(tek_fokuslu_insertler);
     RUN(d067sb_sinirlari);
     RUN(d023_sinirlari);

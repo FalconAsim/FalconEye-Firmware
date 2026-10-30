@@ -21,6 +21,9 @@
  * monoblokla 100 kV üstü hiç kullanılmadı (Asım, 29.10.2026). 100 kV üstü
  * yalnız kVp metre doğrulaması ve üretici onayıyla açılır. */
 #define FE_GEN_KV_MAX           100.0f
+/* Jeneratör tüp akımı üst sınırı: büyük fokus en çok 50 mA (Asım, 30.10.2026).
+ * İnsert değeri daha yüksek olsa da (DF-161SBR 60 mA) bu sınır uygulanır. */
+#define FE_GEN_MA_MAX            50.0f
 
 /* --- Zamanlamalar (ms) --- */
 #define FE_TICK_MS                    1u
