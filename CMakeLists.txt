@@ -22,11 +22,22 @@ add_library(fe_core STATIC
   core/src/proto.c
   core/src/hs_line.c
   core/src/service.c
+  core/src/thermal_mon.c
 )
 target_include_directories(fe_core PUBLIC core/include)
 if(NOT CMAKE_CROSSCOMPILING)
   target_link_libraries(fe_core PUBLIC m)
 endif()
+
+# Kart M (hayvan modülü) çekirdeği: protokol (Kart A ile ortak), R bulucu, solunum fazı, tetik penceresi
+add_library(fe_modul STATIC
+  modul/src/km_proto.c
+  modul/src/km_ecg.c
+  modul/src/km_resp.c
+  modul/src/km_gate.c
+  modul/src/km_app.c
+)
+target_include_directories(fe_modul PUBLIC modul/include)
 
 # Yedek zamanlayıcı (STM32G031 için ayrı firmware; mantığı burada test edilir)
 add_library(fe_backup STATIC backup/backup_timer.c)
@@ -41,6 +52,22 @@ if(NOT CMAKE_CROSSCOMPILING)
   add_executable(test_tube tests/test_tube.c)
   target_link_libraries(test_tube fe_core)
   add_test(NAME tup_korumasi COMMAND test_tube)
+
+  add_executable(test_thermal tests/test_thermal.c)
+  target_link_libraries(test_thermal fe_sim)
+  add_test(NAME kutu_sicakligi_fan COMMAND test_thermal)
+
+  add_executable(test_modul tests/test_modul.c)
+  target_link_libraries(test_modul fe_modul m)
+  add_test(NAME hayvan_modulu COMMAND test_modul)
+
+  # Sanal kabul testi (SIL): CSV çıktı, FalconEye_Test_Proseduru rev 0.1
+  add_executable(sim_kabul tests/sim_kabul.c)
+  target_link_libraries(sim_kabul fe_sim)
+  add_test(NAME sanal_kabul_testi COMMAND sim_kabul)
+  add_executable(sim_sicaklik tests/sim_sicaklik.c)
+  target_link_libraries(sim_sicaklik fe_sim m)
+  add_test(NAME sanal_sicaklik_testi COMMAND sim_sicaklik)
 
   add_executable(test_exposure tests/test_exposure.c)
   target_link_libraries(test_exposure fe_sim)
