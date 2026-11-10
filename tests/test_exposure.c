@@ -853,6 +853,141 @@ TEST(erken_kademe_sonrasi_basili_tutma)
     CHECK(sm.state == ST_FAULT && sm.last_reason == END_BUTTON_STUCK, "60 s sonra takili sayilir");
 }
 
+/* ---- EKG / solunum tetikleme (arayüz tanımı §14, §15) ---- */
+TEST(tetikleme_pencereyi_bekler)
+{
+    setup(true);
+    exposure_params_t p = { 60, 20, 20, FOCUS_LARGE, MODE_RADIOGRAPHY };
+    sm_set_params(&sm, &p);
+    CHECK(sm_set_gate(&sm, 1, 30) == SM_SET_OK, "tetikleme acilir");
+    s.gate_period_ms = 100; s.gate_dly_ms = 40; s.gate_len_ms = 30;      /* fare: R-R 100 ms, pencere R+40..R+70 */
+    s.hs1 = true; sim_run(&s, &sm, 4100);
+    CHECK(sm.state == ST_READY, "hazir");
+    uint32_t x0 = s.xray_on_ms;
+    s.hs2 = true; sim_run(&s, &sm, 400);
+    CHECK(sm.last_record.valid && sm.last_record.reason == END_TIME_DONE, "cekim tamamlandi");
+    CHECK(!s.xray_outside_gate, "X-RAY ON yalniz pencere acikken basladi");
+    CHECK(s.gate_x_lag_ms <= 2u, "pencere acilisindan X-RAY ON'a <= 2 ms (RL5 onceden kapali)");
+    CHECK(s.xray_on_ms - x0 >= 19u && s.xray_on_ms - x0 <= 21u, "sure 20 ms");
+    CHECK(sm.last_record.gate_src == 1 && sm.last_record.gate_wait_ms <= 120u, "kayitta tetikleme kaynagi ve bekleme suresi");
+    CHECK(!s.xray_without_rl5, "RL5'siz X-RAY ON yok");
+    s.hs1 = s.hs2 = false; sim_run(&s, &sm, 50);
+    CHECK(sm.state == ST_IDLE, "birakinca bekle");
+}
+
+TEST(tetikleme_pencere_gelmezse_cekim_yok)
+{
+    setup(true);
+    exposure_params_t p = { 60, 20, 20, FOCUS_LARGE, MODE_RADIOGRAPHY };
+    sm_set_params(&sm, &p);
+    sm_set_gate(&sm, 1, 30);
+    s.gate_period_ms = 0;                                   /* pencere hiç gelmiyor */
+    s.hs1 = true; sim_run(&s, &sm, 4100);
+    uint32_t x0 = s.xray_on_ms;
+    s.hs2 = true; sim_run(&s, &sm, 2900);
+    CHECK(sm.state == ST_READY, "3 s dolmadan bekliyor");
+    sim_run(&s, &sm, 200);
+    CHECK(sm.state == ST_LOCKED && sm.last_reason == END_GATE_TIMEOUT, "3 s sonra kilit: E107");
+    CHECK(fe_error_for(END_GATE_TIMEOUT, TUBE_OK)->code == 107, "kod 107");
+    CHECK(s.xray_on_ms == x0, "isinlama yok");
+    sim_run(&s, &sm, 500);
+    CHECK(sm.state == ST_LOCKED && s.xray_on_ms == x0, "buton basili kalsa da cekim yok; birakmak gerekir");
+}
+
+TEST(tetikleme_pencere_kisaysa_cekim_yok)
+{
+    setup(true);
+    exposure_params_t p = { 60, 20, 20, FOCUS_LARGE, MODE_RADIOGRAPHY };
+    sm_set_params(&sm, &p);
+    sm_set_gate(&sm, 1, 30);
+    s.gate_period_ms = 100; s.gate_dly_ms = 40; s.gate_len_ms = 15;      /* modül 15 ms'lik pencere veriyor, çekim 20 ms */
+    s.hs1 = true; sim_run(&s, &sm, 4100);
+    uint32_t x0 = s.xray_on_ms;
+    s.hs2 = true; sim_run(&s, &sm, 3200);
+    CHECK(s.xray_on_ms == x0 && sm.last_reason == END_GATE_TIMEOUT, "pencere sureye yetmiyor: cekim yok, E107");
+}
+
+TEST(tetikleme_buton_birakilirsa_cekim_yok)
+{
+    setup(true);
+    exposure_params_t p = { 60, 20, 20, FOCUS_LARGE, MODE_RADIOGRAPHY };
+    sm_set_params(&sm, &p);
+    sm_set_gate(&sm, 2, 200);
+    s.gate_period_ms = 1500; s.gate_dly_ms = 900; s.gate_len_ms = 200;   /* solunum: pencere nefesin sonunda */
+    s.hs1 = true; sim_run(&s, &sm, 4100);
+    uint32_t x0 = s.xray_on_ms;
+    uint32_t ph = s.now_ms % 1500u;                      /* pencereden hemen sonraya hizala: 2. kademe pencere dışında basılsın */
+    sim_run(&s, &sm, (1500u + 1150u - ph) % 1500u);
+    s.hs2 = true; sim_run(&s, &sm, 300);
+    CHECK(sm.state == ST_READY && s.xray_on_ms == x0, "pencere beklenirken isinlama yok");
+    s.hs2 = false; sim_run(&s, &sm, 1500);               /* pencere geliyor ama 2. kademe bırakılmış */
+    CHECK(s.xray_on_ms == x0 && sm.state == ST_READY, "2. kademe birakildi: pencere gelse de cekim yok");
+    s.hs2 = true; sim_run(&s, &sm, 1700);
+    CHECK(sm.last_record.valid && sm.last_record.reason == END_TIME_DONE && !s.xray_outside_gate, "yeniden basinca sonraki pencerede cekim");
+}
+
+TEST(tetikleme_beklerken_guvenlik_zinciri)
+{
+    setup(true);
+    exposure_params_t p = { 60, 20, 20, FOCUS_LARGE, MODE_RADIOGRAPHY };
+    sm_set_params(&sm, &p);
+    sm_set_gate(&sm, 1, 30);
+    s.gate_period_ms = 0;
+    s.hs1 = true; sim_run(&s, &sm, 4100);
+    uint32_t x0 = s.xray_on_ms;
+    s.hs2 = true; sim_run(&s, &sm, 500);
+    s.door_ok = false; sim_run(&s, &sm, 20);
+    CHECK(sm.state == ST_LOCKED && sm.last_reason == END_INTERLOCK && s.xray_on_ms == x0, "beklerken kapi acilirsa kilit (E103)");
+    CHECK(!s.last_out.rl5_series && !s.last_out.preheat, "RL5 ve on isitma birakildi");
+    s.door_ok = true; s.hs1 = s.hs2 = false; sim_run(&s, &sm, 50);
+
+    s.hs1 = true; sim_run(&s, &sm, 4100);
+    s.hs2 = true; sim_run(&s, &sm, 500);
+    s.estop_ok = false; sim_run(&s, &sm, 20);
+    CHECK(sm.state == ST_FAULT && sm.last_reason == END_ESTOP && s.xray_on_ms == x0, "beklerken acil stop: hata (E104)");
+    s.estop_ok = true; s.hs1 = s.hs2 = false; sim_run(&s, &sm, 20); sm_ack_fault(&sm); sim_run(&s, &sm, 20);
+
+    s.hs1 = true; sim_run(&s, &sm, 4100);
+    s.hs2 = true; sim_run(&s, &sm, 500);
+    s.gate_module_ok = false; sim_run(&s, &sm, 20);
+    CHECK(sm.state == ST_LOCKED && sm.last_reason == END_GATE_MODULE && s.xray_on_ms == x0, "modul susarsa cekim yok (E408)");
+    CHECK(fe_error_for(END_GATE_MODULE, TUBE_OK)->code == 408, "kod 408");
+    CHECK(!s.xray_without_rl5 && !s.hv_from_short, "istenmeyen isinlama yok");
+}
+
+TEST(tetikleme_sure_pencereden_uzun_reddedilir)
+{
+    setup(true);
+    exposure_params_t p = { 60, 20, 100, FOCUS_LARGE, MODE_RADIOGRAPHY };
+    sm_set_params(&sm, &p);
+    CHECK(sm_set_gate(&sm, 1, 30) == SM_SET_GATE_WINDOW && sm.gate_src == 0, "100 ms cekim, 30 ms pencere: tetikleme acilmaz (E215)");
+    p.time_ms = 20; sm_set_params(&sm, &p);
+    CHECK(sm_set_gate(&sm, 1, 30) == SM_SET_OK, "20 ms ile acilir");
+    p.time_ms = 50;
+    CHECK(sm_set_params_ex(&sm, &p) == SM_SET_GATE_WINDOW && sm.params.time_ms == 20, "sonradan sure uzatilamaz (E215), eski deger kalir");
+    CHECK(fe_error_by_code(215) && fe_error_by_code(216) && fe_error_by_code(108) && fe_error_by_code(109) &&
+          fe_error_by_code(604) && fe_error_by_code(605), "yeni kodlar tabloda");
+    s.hs1 = true; sim_run(&s, &sm, 500);
+    CHECK(sm_set_gate(&sm, 0, 0) == SM_SET_BUSY, "hazirlikta tetikleme ayari degismez");
+    s.hs1 = false; sim_run(&s, &sm, 50);
+    CHECK(sm_set_gate(&sm, 0, 0) == SM_SET_OK, "beklemede kapatilir");
+    p.time_ms = 50;
+    CHECK(sm_set_params_ex(&sm, &p) == SM_SET_OK, "tetikleme kapaliyken sure serbest");
+}
+
+TEST(tetikleme_kapaliyken_davranis_degismez)
+{
+    setup(true);
+    exposure_params_t p = { 60, 20, 100, FOCUS_LARGE, MODE_RADIOGRAPHY };
+    sm_set_params(&sm, &p);
+    s.gate_module_ok = false; s.gate_period_ms = 0;       /* modül yok */
+    s.hs1 = true; sim_run(&s, &sm, 4100);
+    uint32_t x0 = s.xray_on_ms;
+    s.hs2 = true; sim_run(&s, &sm, 300);
+    CHECK(sm.last_record.valid && sm.last_record.reason == END_TIME_DONE && s.xray_on_ms - x0 >= 99u, "modul olmadan normal cekim");
+    CHECK(sm.last_record.gate_src == 0, "kayitta tetikleme kapali");
+}
+
 int main(void)
 {
     printf("Isinlama durum makinesi testleri\n");
@@ -910,5 +1045,12 @@ int main(void)
     RUN(referans_isinlamada_sapti);
     RUN(tek_fokuslu_insertte_acilis);
     RUN(kalibrasyon_yok_uyarisi);
+    RUN(tetikleme_pencereyi_bekler);
+    RUN(tetikleme_pencere_gelmezse_cekim_yok);
+    RUN(tetikleme_pencere_kisaysa_cekim_yok);
+    RUN(tetikleme_buton_birakilirsa_cekim_yok);
+    RUN(tetikleme_beklerken_guvenlik_zinciri);
+    RUN(tetikleme_sure_pencereden_uzun_reddedilir);
+    RUN(tetikleme_kapaliyken_davranis_degismez);
     return REPORT();
 }

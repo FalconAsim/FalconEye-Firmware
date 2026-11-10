@@ -414,6 +414,7 @@ static void cmd_set(tgp_ctx_t *c, out_t *o, int seq, const char *args, bool mode
         case SM_SET_FOCUS_LOCKED:    line_nak(c, o, seq, 'E', 213); return;
         case SM_SET_FLUORO_DISABLED:
         case SM_SET_FOCUS_DISABLED:  line_nak(c, o, seq, 'E', TGP_ERR_DISABLED); return;
+        case SM_SET_GATE_WINDOW:     line_nak(c, o, seq, 'E', 215); return;
         }
         line_ack(c, o, seq);
         line_actual(c, o);
@@ -449,6 +450,7 @@ static void cmd_set(tgp_ctx_t *c, out_t *o, int seq, const char *args, bool mode
     case SM_SET_FOCUS_LOCKED:    line_nak(c, o, seq, 'E', 213); return;
     case SM_SET_FLUORO_DISABLED:
     case SM_SET_FOCUS_DISABLED:  line_nak(c, o, seq, 'E', TGP_ERR_DISABLED); return;
+    case SM_SET_GATE_WINDOW:     line_nak(c, o, seq, 'E', 215); return;
     }
     line_ack(c, o, seq);
     line_actual(c, o);

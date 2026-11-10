@@ -16,6 +16,13 @@ typedef struct {
     bool detector_ready;
     bool detector_enable, detector_error;
     bool pc_link_ok;        /* PC modu: yazılım bağlantısı canlı (varsayılan true) */
+    /* Tetikleme modülü modeli: her gate_period_ms'de bir, gate_dly_ms'de açılıp gate_len_ms süren pencere.
+     * gate_period_ms = 0: pencere hiç gelmez. gate_first_x_ms: pencere açıldıktan X-RAY ON'a kadar geçen süre (ölçüm). */
+    bool gate_module_ok;    /* varsayılan true */
+    uint32_t gate_period_ms, gate_dly_ms, gate_len_ms;
+    bool xray_outside_gate; /* kontrol: X-RAY ON, pencere kapalıyken başladı */
+    uint32_t gate_x_lag_ms; /* son çekimde pencere açılışından X-RAY ON'a gecikme */
+    bool gate_prev_x;
 
     /* Fokus rölesi ve referans geri okuması */
     bool focus_fb;               /* röle geri bildirimi (çekili = küçük) */

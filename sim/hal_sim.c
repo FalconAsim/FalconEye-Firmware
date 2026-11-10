@@ -11,6 +11,7 @@ void sim_init(sim_t *s)
     s->backup_ok = true;
     s->detector_ready = true;
     s->pc_link_ok = true;
+    s->gate_module_ok = true;
     s->focus_delay_ms = 10u;
     s->filament_ready_after_ms = 3500u;   /* gerçek flaman 4 s'den kısa sürede hazır */
     s->rise_tau_ms = 1.0f;   /* yüksek frekanslı jeneratör: ~1 ms yükselme */
@@ -47,7 +48,15 @@ static void gen_model(sim_t *s, const sm_outputs_t *o)
 void sim_run(sim_t *s, exposure_sm_t *sm, uint32_t ms)
 {
     for (uint32_t i = 0; i < ms; i++) {
+        uint16_t gate_open = 0u; uint32_t gate_phase = 0u;
+        if (s->gate_period_ms) {
+            gate_phase = s->now_ms % s->gate_period_ms;
+            if (gate_phase >= s->gate_dly_ms && gate_phase < s->gate_dly_ms + s->gate_len_ms)
+                gate_open = (uint16_t)(s->gate_dly_ms + s->gate_len_ms - gate_phase);
+        }
         sm_inputs_t in = {
+            .gate_module_ok = s->gate_module_ok,
+            .gate_open_ms = gate_open,
             .hs_stage1 = s->hs1 || s->hs1_no_short,
             .hs_stage1_nc = !s->hs1,
             .hs_stage2 = s->hs2 || s->hs2_no_short,
@@ -83,6 +92,14 @@ void sim_run(sim_t *s, exposure_sm_t *sm, uint32_t ms)
         sm_outputs_t out;
         sm_step(sm, &in, &out, 1u);
         gen_model(s, &out);
+        {
+            const bool x = out.xray_on && out.rl5_series;
+            if (x && !s->gate_prev_x && sm->gate_src != 0u) {
+                if (!gate_open) s->xray_outside_gate = true;
+                else s->gate_x_lag_ms = gate_phase - s->gate_dly_ms;
+            }
+            s->gate_prev_x = x;
+        }
         s->last_out = out;
         s->now_ms++;
     }

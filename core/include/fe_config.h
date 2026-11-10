@@ -32,6 +32,9 @@
 #define FE_FILAMENT_OK_TIMEOUT_MS  3000u   /* ısınma sonrası "Filaman tamam" bekleme payı */
 #define FE_DETECTOR_READY_TIMEOUT_MS 10000u
 #define FE_DETECTOR_ENABLE_TIMEOUT_MS  1000u   /* senkron: ışınlama izni bekleme */
+/* EKG / solunum tetikleme (arayüz tanımı §14, §15) */
+#define FE_GATE_TIMEOUT_MS             3000u   /* 2. kademe basılıyken pencere bu sürede gelmezse çekim yok (E107) */
+#define FE_GATE_MARGIN_MS              2u      /* pencerenin kalan süresi ≥ ışınlama süresi + bu pay */
 #define FE_KV_RISE_MS                20u   /* tolerans kontrolü bu süreden sonra başlar */
 #define FE_TOL_VIOLATION_MS          50u   /* tolerans dışında kalma süresi -> hata */
 #define FE_INPUT_DEBOUNCE_MS         15u

@@ -24,6 +24,15 @@ static const fe_error_t table[] = {
     { 106, 'E', SEV_INFO,    "Buton erken bırakıldı",
       "Işınlama sırasında el butonu ayarlanan süre dolmadan bırakıldı; çekim eksik dozla bitti. Ekranda ayarlanan ve gerçekleşen süre gösterilir.",
       "Görüntüyü kontrol edin. Gerekirse butonu süre bitene ve ses kesilene kadar basılı tutarak çekimi tekrarlayın." },
+    { 107, 'E', SEV_INFO,    "Tetik penceresi gelmedi, çekim yapılmadı",
+      "EKG / solunum tetiklemesi açıkken buton basılı tutuldu ama 3 saniye içinde uygun tetik penceresi oluşmadı (sinyal zayıf, ritim aralık dışı ya da pencere ışınlama süresine yetmiyor).",
+      "Butonu bırakın. EKG ve solunum eğrisini, gecikme ve pencere ayarını kontrol edip yeniden deneyin. Tetiklemeyi kapatarak da çekim yapabilirsiniz." },
+    { 108, 'E', SEV_INFO,    "EKG elektrotu kopuk",
+      "Hayvan modülü bir EKG elektrotunun (RA / LA / LL / RL) bağlı olmadığını algıladı; ekranda hangisi olduğu gösterilir.",
+      "Elektrotu ve kablosunu kontrol edin, jel / temas durumunu düzeltin." },
+    { 109, 'E', SEV_INFO,    "Solunum sinyali yok",
+      "Seçili solunum kaynağından (yastık / kemer, T parçası ya da empedans) geçerli nefes sinyali alınamıyor ya da kaynak takılı değil.",
+      "Yastığın / kemerin konumunu ve hortumunu, T parçası bağlantısını kontrol edin; gerekirse solunum tabanını sıfırlayın." },
 
     /* --- E2xx Tüp koruması --- */
     { 201, 'E', SEV_INFO,    "kV tüp alt sınırının altında",
@@ -68,6 +77,12 @@ static const fe_error_t table[] = {
     { 214, 'E', SEV_INFO,    "Bu tüpte küçük fokus yok",
       "Kurulu tüp insertinin tek fokusu var; küçük fokus seçilemez.",
       "Büyük fokusla çalışın. Küçük fokus gerekiyorsa çift fokuslu insert için servise danışın." },
+    { 215, 'E', SEV_INFO,    "Işınlama süresi tetik penceresinden uzun",
+      "Tetikleme açıkken ayarlanan ışınlama süresi, tetik penceresi süresinden uzun; çekim pencereye sığmaz.",
+      "Süreyi kısaltın (gerekirse mA'yı artırın) ya da pencere süresini uzatın." },
+    { 216, 'E', SEV_INFO,    "Tetik gecikmesi bu tür için çok kısa",
+      "Seçilen hayvan türünde R dalgası kararı, girilen gecikmeden daha geç veriliyor; pencere bu kadar erken açılamaz. Ekranda en küçük gecikme gösterilir.",
+      "Gecikmeyi gösterilen en küçük değere ya da üzerine ayarlayın." },
     { 220, 'E', SEV_ERROR,   "Tüp aşırı sıcak",
       "Tüp termik anahtarı açıldı.",
       "Tüpün soğumasını bekleyin. Hata soğuk tüpte sürüyorsa servisi arayın." },
@@ -119,6 +134,9 @@ static const fe_error_t table[] = {
     { 407, 'E', SEV_SERVICE, "kV / mA referans çıkışı uyuşmazlığı",
       "Jeneratöre giden kV veya mA referans geriliminin geri okuması ayarla uyuşmuyor (DAC, tampon veya kablo arızası).",
       "Cihazı kullanmayın ve servisi arayın." },
+    { 408, 'E', SEV_SERVICE, "Tetikleme modülü yanıt vermiyor",
+      "Hayvan modülünden (EKG + solunum) durum mesajı gelmiyor: kablo takılı değil, modül arızalı ya da haberleşme hattı bozuk.",
+      "Modül kablosunu (arka panel P16) kontrol edin. Tetiklemeyi kapatarak çekim yapabilirsiniz. Sürerse servisi arayın." },
 
     /* --- E5xx Dedektör --- */
     { 501, 'E', SEV_INFO,    "Dedektör hazır değil",
@@ -153,6 +171,12 @@ static const fe_error_t table[] = {
     { 603, 'W', SEV_WARNING, "DAP metre okunamadı",
       "DAP metre servis menüsünde açık ama çekimden sonra okuma gelmedi; bu çekimin DAP değeri yazılımın hesabıdır.",
       "DAP metre kablosunu ve beslemesini kontrol edin. Sürerse servisi arayın." },
+    { 604, 'W', SEV_WARNING, "EKG sinyali gürültülü",
+      "EKG sinyalinde R dalgası güvenilir bulunamıyor; gürültüde tetik penceresi açılmaz.",
+      "Elektrot temasını, hayvanın hareketini ve yakındaki elektrikli cihazları kontrol edin." },
+    { 605, 'W', SEV_WARNING, "Solunum taban basıncı aralık dışı",
+      "Yastık / kemer taban basıncı ölçüm aralığının dışında (çok az ya da çok fazla şişirilmiş, hortum çıkmış).",
+      "Yastığı / kemeri yeniden yerleştirip uygun basınca şişirin; hortum bağlantısını kontrol edin." },
 };
 
 #define N_ERR (sizeof(table) / sizeof(table[0]))
@@ -220,6 +244,8 @@ const fe_error_t *fe_error_for(end_reason_t r, tube_result_t t)
     case END_LINK_LOST_SERIAL: return by_code(703);
     case END_FOCUS_RELAY:      return by_code(406);
     case END_REF_READBACK:     return by_code(407);
+    case END_GATE_TIMEOUT:     return by_code(107);
+    case END_GATE_MODULE:      return by_code(408);
     }
     return NULL;
 }
