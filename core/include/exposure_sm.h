@@ -56,6 +56,8 @@ typedef enum {
     END_LINK_LOST_SERIAL, /* PC modu: ışınlamada RS-232 (Current) bağlantısı koptu (E703) */
     END_FOCUS_RELAY,      /* fokus rölesi geri bildirimi komutla uyuşmuyor (E406) */
     END_REF_READBACK,     /* kV / mA referans (DAC) çıkışının geri okuması uyuşmuyor (E407) */
+    END_GATE_TIMEOUT,     /* tetikleme: 2. kademe basılıyken pencere 3 s içinde gelmedi, çekim yapılmadı (E107) */
+    END_GATE_MODULE,      /* tetikleme modülü yanıt vermiyor (E408) */
     END__COUNT
 } end_reason_t;
 
@@ -82,6 +84,9 @@ typedef struct {
     bool preheat_line_fb; /* geri okuma: J2 PreHeat hattı aktif */
     bool pc_link_ok;      /* PC modu: seçili yazılım bağlantısı canlı (TGP veya Current) */
     bool focus_fb_small;  /* fokus rölesi geri bildirimi: çekili = küçük fokus */
+    bool gate_module_ok;  /* tetikleme modülü canlı (durum mesajı < 300 ms) */
+    uint16_t gate_open_ms;/* tetik penceresinin kullanılabilir kalan süresi (ms); 0 = kapalı, eski mesaj ya da ayar uyuşmuyor.
+                           * HAL: km_win_rx_usable() kurallarıyla hesaplar (mesaj yaşı düşülmüş) */
     float kv_ref_fb;      /* kV referans çıkışının geri okuması (kV cinsinden) */
     float ma_ref_fb;      /* mA referans çıkışının geri okuması (mA cinsinden) */
     float kv_fb;          /* ölçülen kV */
@@ -137,6 +142,8 @@ typedef struct {
     float ma_avg;
     end_reason_t reason;
     bool cut;              /* ışınlama bağlantı kopması nedeniyle kesildi */
+    uint8_t gate_src;      /* çekimde etkin tetikleme kaynağı (0 kapalı, 1 EKG, 2 solunum, 3 ikisi) */
+    uint16_t gate_wait_ms; /* 2. kademeden ışınlama başına kadar pencere bekleme süresi */
     bool dap_valid;        /* DAP metreden okundu (sm_record_dap) */
     bool cal_kv_used;      /* servis kalibrasyonunda kV ölçümü girildi (çekim başına bir kez) */
     bool cal_ma_used;      /* servis kalibrasyonunda mA ölçümü girildi */
@@ -182,6 +189,10 @@ typedef struct {
     end_reason_t last_reason;
     tube_result_t last_tube_result;
     exposure_record_t last_record;
+    uint8_t gate_src;          /* tetikleme kaynağı: 0 kapalı (sm_set_gate) */
+    uint16_t gate_win_ms;      /* ayarlı pencere süresi: ışınlama süresi bundan uzun olamaz (E215) */
+    uint32_t gate_wait_ms;     /* HAZIR'da 2. kademe basılıyken pencere bekleme süresi */
+    bool rl5_preclosed;        /* pencere beklerken RL5 önceden kapatıldı: IŞINLAMA'da oturma süresi beklenmez */
 } exposure_sm_t;
 
 #define SM_RL5_SETTLE_MS   15u   /* RL5 kapandıktan sonra X-RAY ON */
@@ -203,7 +214,8 @@ typedef enum {
     SM_SET_BUSY,             /* ışınlama sürüyor */
     SM_SET_FOCUS_LOCKED,     /* hazırlıkta fokus / mod değiştirilemez (E213) */
     SM_SET_FLUORO_DISABLED,  /* floroskopi opsiyonu kapalı */
-    SM_SET_FOCUS_DISABLED    /* büyük fokus bu cihazda kullanılmıyor (servis menüsü) */
+    SM_SET_FOCUS_DISABLED,   /* büyük fokus bu cihazda kullanılmıyor (servis menüsü) */
+    SM_SET_GATE_WINDOW       /* tetikleme açık: ışınlama süresi tetik penceresinden uzun (E215) */
 } sm_set_result_t;
 
 sm_set_result_t sm_set_params_ex(exposure_sm_t *sm, const exposure_params_t *p);
@@ -224,6 +236,13 @@ bool sm_focus_available(const exposure_sm_t *sm, focus_t focus);
 void sm_mode_target(const exposure_sm_t *sm, exp_mode_t mode, exposure_params_t *out);
 sm_set_result_t sm_select_mode(exposure_sm_t *sm, exp_mode_t mode);
 sm_set_result_t sm_toggle_mode(exposure_sm_t *sm);
+
+/* EKG / solunum tetikleme (arayüz tanımı §14): src 0 = kapalı, 1 EKG, 2 solunum, 3 ikisi; win_ms = pencere süresi.
+ * Yalnız BEKLE / KİLİT / HATA durumunda değişir (SM_SET_BUSY). Radyografide ışınlama süresi pencereden uzunsa
+ * SM_SET_GATE_WINDOW (E215) ve ayar değişmez. Tetikleme ışınlamayı BAŞLATMAZ: 2. kademe basılıyken ışınlama bir
+ * sonraki uygun pencereye kadar bekletilir; pencere FE_GATE_TIMEOUT_MS içinde gelmezse çekim yapılmaz (E107).
+ * Floroskopide tetikleme uygulanmaz. */
+sm_set_result_t sm_set_gate(exposure_sm_t *sm, uint8_t src, uint16_t win_ms);
 
 /* DAP metre okuması (HAL, ışınlama bittikten sonra metre entegrasyonunu
  * tamamlayınca). Yalnız dap_meter_enabled iken kayda yazılır. */

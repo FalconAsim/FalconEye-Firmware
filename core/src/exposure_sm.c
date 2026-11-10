@@ -74,6 +74,9 @@ sm_set_result_t sm_set_params_ex(exposure_sm_t *sm, const exposure_params_t *p)
     if (p->focus == FOCUS_LARGE && !sm_focus_available(sm, FOCUS_LARGE)) {
         return SM_SET_FOCUS_DISABLED;
     }
+    if (sm->gate_src != 0u && p->mode != MODE_FLUORO && p->time_ms > sm->gate_win_ms) {
+        return SM_SET_GATE_WINDOW;   /* E215: süre tetik penceresinden uzun */
+    }
     if (sm->state == ST_PREP || sm->state == ST_READY) {
         /* Fokus rölesi yük altında anahtarlanmaz; mod değişimi (el butonu /
          * pedal) hazırlığın anlamını değiştirir. İkisi de hazırlıkta yasak. */
@@ -92,6 +95,23 @@ sm_set_result_t sm_set_params_ex(exposure_sm_t *sm, const exposure_params_t *p)
         return SM_SET_OK;
     }
     sm->params = *p;
+    return SM_SET_OK;
+}
+
+sm_set_result_t sm_set_gate(exposure_sm_t *sm, uint8_t src, uint16_t win_ms)
+{
+    if (sm->state == ST_PREP || sm->state == ST_READY || sm->state == ST_EXPOSING) {
+        return SM_SET_BUSY;
+    }
+    if (src > 3u) {
+        return SM_SET_BUSY;
+    }
+    if (src != 0u && sm->params.mode != MODE_FLUORO && sm->params.time_ms > win_ms) {
+        return SM_SET_GATE_WINDOW;
+    }
+    sm->gate_src = src;
+    sm->gate_win_ms = win_ms;
+    sm->gate_wait_ms = 0u;
     return SM_SET_OK;
 }
 
@@ -203,6 +223,8 @@ static void finish_exposure(exposure_sm_t *sm, end_reason_t reason)
     r->ma_avg = sm->n_samples ? sm->ma_sum / (float)sm->n_samples : 0.0f;
     r->reason = reason;
     r->cut = reason == END_LINK_LOST || reason == END_LINK_LOST_SERIAL;
+    r->gate_src = sm->rl5_preclosed ? sm->gate_src : 0u;
+    r->gate_wait_ms = sm->rl5_preclosed ? (uint16_t)(sm->gate_wait_ms > 65535u ? 65535u : sm->gate_wait_ms) : 0u;
     r->dap_valid = false;      /* DAP metre okuması sonra gelir (sm_record_dap) */
     r->cal_kv_used = false;
     r->cal_ma_used = false;
@@ -516,6 +538,7 @@ void sm_step(exposure_sm_t *sm, const sm_inputs_t *raw, sm_outputs_t *out, uint3
         const bool expose_req = is_fluoro(sm) ? in->pedal : in->hs_stage2;
         if (!expose_req) {
             sm->det_wait_ms = 0u;
+            sm->gate_wait_ms = 0u;
         }
         if (expose_req && sm->cfg.wait_detector_enable) {
             /* Senkron dedektör: önce ışınlama isteği, izin gelince ışınlama */
@@ -537,6 +560,31 @@ void sm_step(exposure_sm_t *sm, const sm_inputs_t *raw, sm_outputs_t *out, uint3
                 lock(sm, END_TUBE_REJECT);
                 outputs_off(out);
                 break;
+            }
+            /* EKG / solunum tetikleme: buton izin verdi, ışınlama uygun pencereyi bekler.
+             * Beklerken RL5 önceden kapatılır (oturma süresi pencereden yemesin; Asım onayı 10.11.2026,
+             * arayüz tanımı §15.6); X-RAY ON komutu verilmez.
+             * Kapı, acil stop, filaman, buton bırakma denetimleri HAZIR durumundaki gibi sürer. */
+            const bool gated = sm->gate_src != 0u && !is_fluoro(sm);
+            sm->rl5_preclosed = false;
+            if (gated) {
+                out->rl5_series = true;
+                sm->gate_wait_ms += dt;
+                if (!in->gate_module_ok) {
+                    lock(sm, END_GATE_MODULE);
+                    outputs_off(out);
+                    break;
+                }
+                if (sm->gate_wait_ms >= FE_GATE_TIMEOUT_MS) {
+                    lock(sm, END_GATE_TIMEOUT);
+                    outputs_off(out);
+                    break;
+                }
+                if (sm->gate_wait_ms <= SM_RL5_SETTLE_MS ||
+                    (uint32_t)in->gate_open_ms < sm->params.time_ms + FE_GATE_MARGIN_MS) {
+                    break;   /* RL5 oturmadı ya da pencere yok / yetmiyor: bekle */
+                }
+                sm->rl5_preclosed = true;
             }
             sm->t_expose_ms = 0u;
             sm->tol_kv_ms = sm->tol_ma_ms = 0u;
@@ -573,7 +621,7 @@ void sm_step(exposure_sm_t *sm, const sm_inputs_t *raw, sm_outputs_t *out, uint3
             reason = is_fluoro(sm) ? END_RELEASED : END_EARLY_RELEASE;
         } else if (!fil_ok(sm, in)) {
             reason = END_FILAMENT_LOST;
-        } else if (sm->t_state_ms > SM_RL5_SETTLE_MS) {
+        } else if (sm->rl5_preclosed || sm->t_state_ms > SM_RL5_SETTLE_MS) {
             /* RL5 oturdu: X-RAY ON aktif */
             if (!in->backup_ok) {
                 reason = END_BACKUP_TIMER;
@@ -729,6 +777,8 @@ const char *sm_reason_text(end_reason_t r)
     case END_LINK_LOST_SERIAL: return "Isinlama RS-232 baglantisi koptugu icin kesildi";
     case END_FOCUS_RELAY:      return "Fokus rolesi uyusmazligi";
     case END_REF_READBACK:     return "kV / mA referans cikisi uyusmazligi";
+    case END_GATE_TIMEOUT:     return "Tetik penceresi gelmedi";
+    case END_GATE_MODULE:      return "Tetikleme modulu yanit vermiyor";
     case END__COUNT:           break;
     }
     return "?";
