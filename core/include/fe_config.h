@@ -27,7 +27,11 @@
 
 /* --- Zamanlamalar (ms) --- */
 #define FE_TICK_MS                    1u
-#define FE_FILAMENT_WARMUP_MS      4000u   /* kullanıcı: 4 s */
+#define FE_FILAMENT_WARMUP_MS      4000u   /* kullanıcı: 4 s; invertörün kendi hazırı 3 s (payla) */
+/* İnvertörün "Sistem hazır"ı kart tarafından okunuyor mu (J2-14 adayı).
+ * 0: okunmuyor, hazır yalnız süreyle (sm_config_t.filament_ready_by_timer = true)
+ * Asım 30.10.2026: invertör 1. kademeden 3 s sonra hazır ikazını kendiliğinden verir. */
+#define FE_FILAMENT_OK_FROM_LINE      0
 #define FE_PREP_HOLD_MAX_MS       30000u   /* 1. kademe en uzun bekleme; flaman ömrü */
 #define FE_FILAMENT_OK_TIMEOUT_MS  3000u   /* ısınma sonrası "Filaman tamam" bekleme payı */
 #define FE_DETECTOR_READY_TIMEOUT_MS 10000u
