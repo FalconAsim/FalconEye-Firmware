@@ -141,6 +141,27 @@ TEST(filaman_hazir_olmazsa)
     CHECK(!s.last_out.ready_indicator, "hazir yanmamali");
 }
 
+TEST(kap_pwr_on_gecikmeli)
+{
+    /* Açılıştan 3 s sonra şarj rölesi çeker; hazırlık ancak 3,5 s'den sonra başlar */
+    sm_config_t cfg = { .hs_dual_channel = true, .pedal_dual_channel = true, .line_readback = true,
+                        .cap_charge_ms = FE_CAP_CHARGE_DELAY_MS };
+    sm_init(&sm, &cfg);
+    sim_init(&s);
+    sim_run(&s, &sm, 1000);
+    CHECK(!s.last_out.cap_pwr_on, "1 s: role cekmemeli");
+    set_rad(70, 20, 100, FOCUS_LARGE);
+    s.hs1 = true;
+    sim_run(&s, &sm, 2100);   /* t = 3,1 s */
+    CHECK(s.last_out.cap_pwr_on, "3,1 s: role cekili");
+    CHECK(!s.last_out.preheat && sm.state == ST_IDLE, "oturma bitmeden hazirlik yok");
+    sim_run(&s, &sm, 500);    /* t = 3,6 s */
+    CHECK(s.last_out.preheat && sm.state == ST_PREP, "sonra hazirlik baslar");
+    release_all();
+    sim_run(&s, &sm, 100);
+    CHECK(s.last_out.cap_pwr_on, "her durumda tutulur");
+}
+
 TEST(sistem_hazir_sureyle)
 {
     /* İnvertör hazırı kendi verir; kart sinyal okumaz: hazır yalnız süreyle */
@@ -858,6 +879,7 @@ int main(void)
 {
     printf("Isinlama durum makinesi testleri\n");
     RUN(normal_radyografi);
+    RUN(kap_pwr_on_gecikmeli);
     RUN(sistem_hazir_sureyle);
     RUN(erken_ikinci_kademe);
     RUN(dogrudan_ikinci_kademe);

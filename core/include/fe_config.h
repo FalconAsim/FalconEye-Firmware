@@ -43,6 +43,12 @@
 #define FE_ESTOP_MISMATCH_MS        100u   /* iki acil stop kontağı aynı anda açılmalı */
 #define FE_LINE_MISMATCH_MS           5u   /* J2 hat geri okuma uyuşmazlığı -> hata */
 #define FE_FOCUS_SETTLE_MS           50u   /* fokus rölesi oturma süresi (filaman sürülmeden önce) */
+/* İnvertör kondansatör şarj rölesi (KAP_PWR_ON, J4-5): cihaza enerji verildikten
+ * 2–3 s sonra çeker ve kondansatörleri devreye alır (Asım, 01.11.2026). Hazırlık
+ * (1. kademe) ancak röle çekip oturduktan sonra başlar. HAL bu değeri
+ * sm_config_t.cap_charge_ms'e yazar. */
+#define FE_CAP_CHARGE_DELAY_MS     3000u
+#define FE_CAP_SETTLE_MS            500u
 #define FE_FOCUS_MISMATCH_MS        100u   /* röle geri bildirimi komutla uyuşmuyor -> E406 */
 #define FE_REF_MISMATCH_MS           20u   /* DAC geri okuması uyuşmuyor -> E407 */
 #define FE_REF_TOL_KV               1.0f   /* kV referansı geri okuma toleransı (en az) */

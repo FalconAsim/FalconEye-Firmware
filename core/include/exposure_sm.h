@@ -96,6 +96,7 @@ typedef struct {
     bool det_prep;        /* senkron: dedektöre hazırlık isteği */
     bool det_exp_req;     /* senkron: dedektöre ışınlama isteği */
     bool focus_small;     /* fokus rölesi: çekili = küçük fokus, bırakık = büyük (hataya güvenli) */
+    bool cap_pwr_on;      /* KAP_PWR_ON: invertör kondansatör şarj rölesi (açılıştan cap_charge_ms sonra, sürekli) */
     bool lamp_prep;       /* J21 hazır/hazırlık lambası */
     bool lamp_exposure;   /* J21 ışınlama lambası */
     bool buzzer;          /* panel + J21 harici buzzer */
@@ -122,6 +123,7 @@ typedef struct {
     bool pc_link_required;         /* PC kontrol modu: bağlantı zorunlu, koparsa ışınlama kesilir */
     bool pc_link_serial;           /* PC bağlantısı RS-232 (Current); false = TGP */
     bool focus_relay_readback;     /* fokus rölesi durum geri bildirimi takılı */
+    uint32_t cap_charge_ms;        /* açılıştan KAP_PWR_ON'a kadar (FE_CAP_CHARGE_DELAY_MS); 0 = hemen */
     bool ref_readback;             /* kV / mA referans çıkışı geri okuması takılı */
 } sm_config_t;
 
@@ -166,6 +168,7 @@ typedef struct {
     float irr_thr_kv;      /* hat geri okuma uyuşmazlığı süresi */
     bool prev_xray_cmd, prev_preheat_cmd;
     bool focus_cmd_small;      /* fokus rölesi komutu; yalnız filaman sürülmüyorken değişir */
+    uint32_t uptime_ms;        /* açılıştan beri (doyumlu) – KAP_PWR_ON zamanlaması */
     uint32_t focus_settle_ms;  /* son fokus değişiminden beri */
     uint32_t focus_bad_ms;
     float prev_kv_ref, prev_ma_ref;

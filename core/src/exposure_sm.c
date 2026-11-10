@@ -316,6 +316,7 @@ void sm_step(exposure_sm_t *sm, const sm_inputs_t *raw, sm_outputs_t *out, uint3
 
     outputs_off(out);
     sm->t_state_ms += dt;
+    if (sm->uptime_ms < 0x7FFFFFFFu) sm->uptime_ms += dt;
     irr_measure(sm, in, dt);
 
     /* Açılışta basılı buton: takılı veya kısa devre */
@@ -430,6 +431,10 @@ void sm_step(exposure_sm_t *sm, const sm_inputs_t *raw, sm_outputs_t *out, uint3
             if (sm->cfg.pc_link_required && !in->pc_link_ok) {
                 lock(sm, END_LINK_DOWN);   /* PC modu: bağlantı yokken hazırlık başlamaz */
                 break;
+            }
+            if (sm->cfg.cap_charge_ms &&
+                sm->uptime_ms < sm->cfg.cap_charge_ms + FE_CAP_SETTLE_MS) {
+                break;   /* kondansatör şarj rölesi henüz çekmedi / oturmadı: hazırlık bekler */
             }
             if (!focus_settled ||
                 (sm->cfg.focus_relay_readback && raw->focus_fb_small != sm->focus_cmd_small)) {
@@ -648,6 +653,8 @@ void sm_step(exposure_sm_t *sm, const sm_inputs_t *raw, sm_outputs_t *out, uint3
 
     /* Fokus rölesi her durumda komutu tutar (outputs_off sonrası) */
     out->focus_small = sm->focus_cmd_small;
+    /* Kondansatör şarj rölesi: açılıştan sonra bir kez çeker, her durumda tutulur */
+    out->cap_pwr_on = sm->uptime_ms >= sm->cfg.cap_charge_ms;
 
     /* Inter-Lock: jeneratörün ikinci izin kanalı */
     out->gen_interlock = out->preheat || out->xray_on;
