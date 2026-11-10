@@ -6,3 +6,5 @@ build-*/
 *.hex
 *.map
 .vscode/
+third_party/
+build-*/

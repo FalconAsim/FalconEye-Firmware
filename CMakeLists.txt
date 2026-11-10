@@ -39,6 +39,13 @@ add_library(fe_modul STATIC
 )
 target_include_directories(fe_modul PUBLIC modul/include)
 
+# Devreye alma (bring-up) çekirdeği: donanımdan bağımsız, PC'de test edilir. Hedef derlemeler: bringup/CMakeLists.txt
+add_library(fe_bringup STATIC bringup/common/bu_core.c bringup/common/bu_boards.c)
+target_include_directories(fe_bringup PUBLIC bringup/common)
+if(NOT CMAKE_CROSSCOMPILING)
+  target_link_libraries(fe_bringup PUBLIC m)
+endif()
+
 # Yedek zamanlayıcı (STM32G031 için ayrı firmware; mantığı burada test edilir)
 add_library(fe_backup STATIC backup/backup_timer.c)
 target_include_directories(fe_backup PUBLIC backup)
@@ -101,7 +108,16 @@ if(NOT CMAKE_CROSSCOMPILING)
   target_link_libraries(test_backup fe_backup)
   add_test(NAME yedek_zamanlayici COMMAND test_backup)
 
+  add_executable(test_bringup tests/test_bringup.c)
+  target_link_libraries(test_bringup fe_bringup)
+  add_test(NAME devreye_alma COMMAND test_bringup)
+
   # Kullanım kılavuzu hata kodu tablosunu üretir
   add_executable(gen_error_table tools/gen_error_table.c)
   target_link_libraries(gen_error_table fe_core)
+endif()
+
+# STM32 hedefleri (devreye alma firmware'i): -DFE_MCU=G474 (Kart B) veya -DFE_MCU=G0B1 (Kart A + Kart M)
+if(CMAKE_CROSSCOMPILING AND DEFINED FE_MCU)
+  add_subdirectory(bringup)
 endif()

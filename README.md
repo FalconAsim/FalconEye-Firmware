@@ -22,6 +22,7 @@ doğrulanır.
 | `core/src/service.c` | Servis menüsü: floroskopi ve DAP metre opsiyonu, kurulu insert, PIN |
 | `core/src/thermal_mon.c` | Kutu iç sıcaklığı: Kart A NTC (CAN 0x330) + iç sensör yedeği, 50 °C çekim kilidi (E221), fan izleme, W606 / W607 / W608 |
 | `tests/sim_sicaklik.c` | Sanal sıcaklık testi: analog zincir sürüklenmesi 25–70 °C, yanlış hata ve arıza yakalama (CSV) |
+| `bringup/` | **Devreye alma firmware'i** (Kart A / B / M, STM32 hedefi): raylar, girişler, çıkışlar (süreli, J2/J4 kilitli, X-RAY ON yok), DAC, kimlikler, CAN, NTC, fan. Ayrıntı: `bringup/README.md` |
 | `backup/backup_timer.c` | Yedek zamanlayıcı (ayrı STM32G031 firmware'inin mantığı) |
 | `docs/generator_protocol_EN.md` | Protokol dokümanı (DR yazılımı üreticileri için, İngilizce) |
 | `tools/gen_error_table.c` | Kılavuzun hata kodu tablosunu firmware'den üretir |
