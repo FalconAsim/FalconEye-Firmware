@@ -86,6 +86,9 @@ static const fe_error_t table[] = {
     { 220, 'E', SEV_ERROR,   "Tüp aşırı sıcak",
       "Tüp termik anahtarı açıldı.",
       "Tüpün soğumasını bekleyin. Hata soğuk tüpte sürüyorsa servisi arayın." },
+    { 221, 'E', SEV_INFO,    "Kumanda kutusu çok sıcak – çekim kilitli",
+      "Kumanda kutusunun iç sıcaklığı 50 °C'ye ulaştı ya da sıcaklık ölçülemiyor. Kutu 47 °C'ye soğuyana kadar yeni çekim yapılamaz; devam eden çekim kesilmez.",
+      "Havalandırma ızgaralarının ve fanın açık olduğunu, oda sıcaklığının 40 °C'yi aşmadığını kontrol edin. Soğumayı bekleyin. Sürerse servisi arayın." },
 
     /* --- E3xx Jeneratör ve ışınlama kalitesi --- */
     { 301, 'E', SEV_ERROR,   "Jeneratör alarmı",
@@ -178,11 +181,14 @@ static const fe_error_t table[] = {
       "Yastık / kemer taban basıncı ölçüm aralığının dışında (çok az ya da çok fazla şişirilmiş, hortum çıkmış).",
       "Yastığı / kemeri yeniden yerleştirip uygun basınca şişirin; hortum bağlantısını kontrol edin." },
     { 606, 'W', SEV_WARNING, "Kumanda kutusu içi sıcak",
-      "Kumanda kutusunun iç sıcaklığı 55 °C'ye ulaştı (tasarım sınırı 50 °C). Ekran ve elektronik ömrü kısalır.",
-      "Havalandırma ızgaralarının açık olduğunu ve oda sıcaklığının 40 °C'yi aşmadığını kontrol edin. Çekim aralarını uzatın. Sürerse servisi arayın." },
+      "Kumanda kutusunun iç sıcaklığı 47 °C'ye ulaştı. 50 °C'de yeni çekim kilitlenir (E221).",
+      "Havalandırma ızgaralarının açık olduğunu ve oda sıcaklığının 40 °C'yi aşmadığını kontrol edin. Çekim aralarını uzatın." },
     { 607, 'W', SEV_WARNING, "Fan arızası",
       "Kumanda kutusu fanı çalıştırıldığı halde dönmüyor ya da çok yavaş dönüyor.",
       "Fanın önünde engel olmadığını kontrol edin ve servisi arayın. Fan değiştirilene kadar yoğun çekimden kaçının." },
+    { 608, 'W', SEV_WARNING, "Kutu sıcaklık sensörü okunamıyor",
+      "Panel kartındaki kutu sıcaklık sensörlerinden veri gelmiyor; yedek sensör kullanılıyor. Hiç sensör okunamıyorsa çekim kilitlenir (E221).",
+      "Servisi arayın: panel kartı bağlantısını ve NTC sensörlerini kontrol ettirin." },
 };
 
 #define N_ERR (sizeof(table) / sizeof(table[0]))
@@ -252,6 +258,7 @@ const fe_error_t *fe_error_for(end_reason_t r, tube_result_t t)
     case END_REF_READBACK:     return by_code(407);
     case END_GATE_TIMEOUT:     return by_code(107);
     case END_GATE_MODULE:      return by_code(408);
+    case END_BOX_HOT:          return by_code(221);
     }
     return NULL;
 }
@@ -264,6 +271,7 @@ const fe_error_t *fe_warning_no_calibration(void) { return by_code(602); }
 const fe_error_t *fe_warning_dap_meter(void) { return by_code(603); }
 const fe_error_t *fe_warning_box_temp(void) { return by_code(606); }
 const fe_error_t *fe_warning_fan(void) { return by_code(607); }
+const fe_error_t *fe_warning_temp_sensor(void) { return by_code(608); }
 
 const fe_error_t *fe_error_table(uint32_t *count)
 {

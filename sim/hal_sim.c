@@ -69,6 +69,7 @@ void sim_run(sim_t *s, exposure_sm_t *sm, uint32_t ms)
                            s->filament_heat_ms >= s->filament_ready_after_ms,
             .door_ok = s->door_ok,
             .thermal_ok = s->thermal_ok,
+            .box_hot = s->box_hot,
             .estop_ok = s->estop_ok,
             .estop_ok_b = s->estop_ok || s->estop_ch2_short,
             .gen_alarm = s->gen_alarm,

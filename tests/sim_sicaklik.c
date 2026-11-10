@@ -161,9 +161,8 @@ static void shot(const char *grup, float tb, const corner_t *c, float gen_extra,
                      fabsf((float)r->irr_ms - (float)ms) <= LIM_T_FRAC * (float)ms + LIM_T_MS &&
                      fabsf(mas_t - mas_set) <= LIM_MAS_FRAC * mas_set + LIM_MAS_ABS;
         }
-        /* yazılım tarafı kabul: süre ±(%10 + 1 ms), ölçülen mAs ±(%10 + 0,2 mAs) (IEC 60601-2-54 biçimi).
-         * Not: sim_kabul yalnız ±%10 kullanır; 10 ms çekimde -%10 taban hata (yükselme kenarı, bulgu S4)
-         * nedeniyle sürüklenme %0,3 eklenince o ölçüt aşılır (bulgu S6). */
+        /* yazılım tarafı kabul: süre ±(%10 + 1 ms), ölçülen mAs ±(%10 + 0,2 mAs) (IEC 60601-2-54 biçimi;
+         * sim_kabul ile aynı – Asım 10.11.2026, bulgu T9) */
         sw_ok = fabsf((float)r->irr_ms - (float)ms) <= FE_TIME_TOL_FRAC * (float)ms + (float)FE_TIME_TOL_MS &&
                 fabsf(r->mas_measured - mas_set) <= LIM_MAS_FRAC * mas_set + LIM_MAS_ABS;
     }

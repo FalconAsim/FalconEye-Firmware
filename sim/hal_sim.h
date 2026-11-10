@@ -11,6 +11,7 @@ typedef struct {
     /* Operatör ve ortam (testler değiştirir) */
     bool hs1, hs2, pedal;
     bool door_ok, thermal_ok, estop_ok;
+    bool box_hot;           /* thermal_mon kilidi (kutu ≥ 50 °C) */
     bool gen_alarm, gen_over;
     bool backup_ok;
     bool detector_ready;

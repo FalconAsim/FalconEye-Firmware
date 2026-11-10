@@ -20,7 +20,7 @@ doğrulanır.
 | `core/src/hs_line.c` | Dirençle denetlenen el butonu hattı (2 telli kademe) |
 | `core/src/proto.c` | Teknogem jeneratör protokolü TGP v1 (Ethernet ve RS-232) |
 | `core/src/service.c` | Servis menüsü: floroskopi ve DAP metre opsiyonu, kurulu insert, PIN |
-| `core/src/thermal_mon.c` | Kutu iç sıcaklığı ve fan izleme: fan komutu, W606 / W607 (çekimi engellemez) |
+| `core/src/thermal_mon.c` | Kutu iç sıcaklığı: Kart A NTC (CAN 0x330) + iç sensör yedeği, 50 °C çekim kilidi (E221), fan izleme, W606 / W607 / W608 |
 | `tests/sim_sicaklik.c` | Sanal sıcaklık testi: analog zincir sürüklenmesi 25–70 °C, yanlış hata ve arıza yakalama (CSV) |
 | `backup/backup_timer.c` | Yedek zamanlayıcı (ayrı STM32G031 firmware'inin mantığı) |
 | `docs/generator_protocol_EN.md` | Protokol dokümanı (DR yazılımı üreticileri için, İngilizce) |

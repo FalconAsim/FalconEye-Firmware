@@ -54,7 +54,7 @@ if(NOT CMAKE_CROSSCOMPILING)
   add_test(NAME tup_korumasi COMMAND test_tube)
 
   add_executable(test_thermal tests/test_thermal.c)
-  target_link_libraries(test_thermal fe_core)
+  target_link_libraries(test_thermal fe_sim)
   add_test(NAME kutu_sicakligi_fan COMMAND test_thermal)
 
   add_executable(test_modul tests/test_modul.c)

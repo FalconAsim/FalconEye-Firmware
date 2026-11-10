@@ -118,10 +118,11 @@ static void shot(const row_t *r, int no)
     }
     bool pass = strcmp(code, r->expect) == 0;
     if (pass && exposed && strcmp(r->expect, "OK") == 0) {
-        /* yazılım tarafı kabul: süre ±(%10 + 1 ms) (FE_TIME_TOL), mAs ±%10 */
+        /* yazılım tarafı kabul: süre ±(%10 + 1 ms) (FE_TIME_TOL), mAs ±(%10 + 0,2 mAs) – IEC 60601-2-54 biçimi
+         * (Asım 10.11.2026, bulgu T9: yalnız ±%10, 10 ms çekimde yükselme kenarı tabanıyla sınırdaydı) */
         float tol_ms = FE_TIME_TOL_FRAC * (float)r->ms + (float)FE_TIME_TOL_MS;
         if (fabsf((float)rec->irr_ms - (float)r->ms) > tol_ms) pass = false;
-        if (fabsf(dmas) > 10.0f) pass = false;
+        if (fabsf(rec->mas_measured - mas_set) > 0.10f * mas_set + 0.2f) pass = false;
         if (s.xray_without_rl5) pass = false;
     }
     if (!pass) n_fail++;

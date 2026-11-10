@@ -58,6 +58,7 @@ typedef enum {
     END_REF_READBACK,     /* kV / mA referans (DAC) çıkışının geri okuması uyuşmuyor (E407) */
     END_GATE_TIMEOUT,     /* tetikleme: 2. kademe basılıyken pencere 3 s içinde gelmedi, çekim yapılmadı (E107) */
     END_GATE_MODULE,      /* tetikleme modülü yanıt vermiyor (E408) */
+    END_BOX_HOT,          /* kumanda kutusu içi ≥ 50 °C: yeni çekim kilitli (E221) */
     END__COUNT
 } end_reason_t;
 
@@ -72,6 +73,7 @@ typedef struct {
     bool filament_ok;     /* akım rölesi: "Sistem hazır" */
     bool door_ok;         /* kapı kapalı (J21) */
     bool thermal_ok;      /* tüp termiği kapalı */
+    bool box_hot;         /* thermal_mon kilidi: kutu içi ≥ 50 °C ya da sensör yok – yalnız 1. kademe başlangıcında bakılır */
     bool estop_ok;        /* acil stop kanal 1 (NC zincir kapalı = basılı değil) */
     bool estop_ok_b;      /* acil stop kanal 2 */
     bool gen_alarm;       /* jeneratör Alarm */

@@ -40,9 +40,13 @@
 #define FE_GATE_TIMEOUT_MS             3000u   /* 2. kademe basılıyken pencere bu sürede gelmezse çekim yok (E107) */
 #define FE_GATE_MARGIN_MS              2u      /* pencerenin kalan süresi ≥ ışınlama süresi + bu pay */
 
-/* Kutu iç sıcaklığı ve fan (thermal_mon). Tasarım: 40 °C oda → iç hava ≤ 50 °C (Sıcaklık doğrulama rev 0.1) */
-#define FE_BOX_WARN_C               55.0f   /* W606: iç hava (ofset düzeltilmiş) bu değere ulaştı */
-#define FE_BOX_CLEAR_C              50.0f   /* W606 bırakma */
+/* Kutu iç sıcaklığı ve fan (thermal_mon). Tasarım: 40 °C oda → iç hava ≤ 50 °C (Sıcaklık doğrulama rev 0.1)
+ * Çekim kilidi 50 °C: Asım 10.11.2026 */
+#define FE_BOX_LOCK_C               50.0f   /* E221: yeni çekim kilitli */
+#define FE_BOX_UNLOCK_C             47.0f   /* kilit bırakma */
+#define FE_BOX_WARN_C               47.0f   /* W606 ön uyarı */
+#define FE_BOX_WARN_CLEAR_C         45.0f   /* W606 bırakma */
+#define FE_TBOX_STALE_MS          3000u     /* CAN 0x330 bu süreden eskiyse Kart A NTC geçersiz → iç sensör (W608) */
 #define FE_FAN_ON_C                 35.0f   /* yalnız termostatik modda */
 #define FE_FAN_OFF_C                30.0f
 #define FE_FAN_TACH_MIN_HZ          20.0f   /* 2 darbe/devir: 600 dev/dk (anma ≈ 1500 dev/dk = 50 Hz) */

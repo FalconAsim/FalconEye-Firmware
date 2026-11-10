@@ -450,6 +450,10 @@ void sm_step(exposure_sm_t *sm, const sm_inputs_t *raw, sm_outputs_t *out, uint3
                 lock(sm, !in->door_ok ? END_INTERLOCK : END_TUBE_THERMAL);
                 break;
             }
+            if (in->box_hot) {
+                lock(sm, END_BOX_HOT);   /* kutu sıcak: yeni hazırlık yok; devam eden çekim kesilmez (Asım 10.11) */
+                break;
+            }
             if (sm->cfg.pc_link_required && !in->pc_link_ok) {
                 lock(sm, END_LINK_DOWN);   /* PC modu: bağlantı yokken hazırlık başlamaz */
                 break;
@@ -752,6 +756,7 @@ const char *sm_reason_text(end_reason_t r)
     case END_RELEASED:         return "Buton birakildi";
     case END_INTERLOCK:        return "Kapi acik";
     case END_TUBE_THERMAL:     return "Tup termigi acik";
+    case END_BOX_HOT:          return "Kumanda kutusu sicak";
     case END_ESTOP:            return "Acil stop";
     case END_FILAMENT_LOST:    return "Filaman sinyali kayboldu";
     case END_GEN_ALARM:        return "Jenerator alarmi";
