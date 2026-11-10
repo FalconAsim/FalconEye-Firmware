@@ -555,7 +555,8 @@ void sm_step(exposure_sm_t *sm, const sm_inputs_t *raw, sm_outputs_t *out, uint3
                 break;
             }
             /* EKG / solunum tetikleme: buton izin verdi, ışınlama uygun pencereyi bekler.
-             * Beklerken RL5 önceden kapatılır (oturma süresi pencereden yemesin); X-RAY ON komutu verilmez.
+             * Beklerken RL5 önceden kapatılır (oturma süresi pencereden yemesin; Asım onayı 10.11.2026,
+             * arayüz tanımı §15.6); X-RAY ON komutu verilmez.
              * Kapı, acil stop, filaman, buton bırakma denetimleri HAZIR durumundaki gibi sürer. */
             const bool gated = sm->gate_src != 0u && !is_fluoro(sm);
             sm->rl5_preclosed = false;
