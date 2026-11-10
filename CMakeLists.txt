@@ -22,6 +22,7 @@ add_library(fe_core STATIC
   core/src/proto.c
   core/src/hs_line.c
   core/src/service.c
+  core/src/thermal_mon.c
 )
 target_include_directories(fe_core PUBLIC core/include)
 if(NOT CMAKE_CROSSCOMPILING)
@@ -52,6 +53,10 @@ if(NOT CMAKE_CROSSCOMPILING)
   target_link_libraries(test_tube fe_core)
   add_test(NAME tup_korumasi COMMAND test_tube)
 
+  add_executable(test_thermal tests/test_thermal.c)
+  target_link_libraries(test_thermal fe_core)
+  add_test(NAME kutu_sicakligi_fan COMMAND test_thermal)
+
   add_executable(test_modul tests/test_modul.c)
   target_link_libraries(test_modul fe_modul m)
   add_test(NAME hayvan_modulu COMMAND test_modul)
@@ -60,6 +65,9 @@ if(NOT CMAKE_CROSSCOMPILING)
   add_executable(sim_kabul tests/sim_kabul.c)
   target_link_libraries(sim_kabul fe_sim)
   add_test(NAME sanal_kabul_testi COMMAND sim_kabul)
+  add_executable(sim_sicaklik tests/sim_sicaklik.c)
+  target_link_libraries(sim_sicaklik fe_sim m)
+  add_test(NAME sanal_sicaklik_testi COMMAND sim_sicaklik)
 
   add_executable(test_exposure tests/test_exposure.c)
   target_link_libraries(test_exposure fe_sim)

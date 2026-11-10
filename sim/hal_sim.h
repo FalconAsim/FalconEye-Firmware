@@ -55,6 +55,20 @@ typedef struct {
     float kv_gain_error;           /* ör. 0.2 => %20 düşük kV (hata enjeksiyonu) */
     float rise_tau_ms;
 
+    /* Sıcaklık sürüklenmesi modeli (1.0 / 0 = sürüklenme yok). Ayrıntı: tests/sim_sicaklik.c
+     *  vref_gain   : REF3030 sürüklenmesi. DAC ve ADC aynı referansı kullanır (oransal):
+     *                jeneratöre giden referans × g, ADC okuması / g.
+     *  kv_div_gain : Kart B kV geri besleme bölücüsü + op-amp kazanç sürüklenmesi (yalnız ölçüm)
+     *  ma_div_gain : Kart B mA geri besleme bölücüsü + op-amp kazanç sürüklenmesi (yalnız ölçüm)
+     *  kv_fb_offset, ma_fb_offset : op-amp ofset sürüklenmesi (kV, mA biriminde)
+     *  ma_gain_error : jeneratör mA çıkışının referanstan sapması (kv_gain_error'ün mA karşılığı) */
+    float vref_gain, kv_div_gain, ma_div_gain;
+    float kv_fb_offset, ma_fb_offset;
+    float ma_gain_error;
+    /* Gerçek (sürüklenmesiz) çıkış kaydı: kV ≥ referansın %75'i olduğu süre boyunca toplam */
+    float kv_true_acc, ma_true_acc;
+    uint32_t hv_true_ms;
+
     /* Kayıt */
     uint32_t now_ms;
     uint32_t xray_on_ms;           /* toplam X-RAY ON süresi */

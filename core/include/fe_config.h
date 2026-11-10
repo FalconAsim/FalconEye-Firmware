@@ -39,6 +39,15 @@
 /* EKG / solunum tetikleme (arayüz tanımı §14, §15) */
 #define FE_GATE_TIMEOUT_MS             3000u   /* 2. kademe basılıyken pencere bu sürede gelmezse çekim yok (E107) */
 #define FE_GATE_MARGIN_MS              2u      /* pencerenin kalan süresi ≥ ışınlama süresi + bu pay */
+
+/* Kutu iç sıcaklığı ve fan (thermal_mon). Tasarım: 40 °C oda → iç hava ≤ 50 °C (Sıcaklık doğrulama rev 0.1) */
+#define FE_BOX_WARN_C               55.0f   /* W606: iç hava (ofset düzeltilmiş) bu değere ulaştı */
+#define FE_BOX_CLEAR_C              50.0f   /* W606 bırakma */
+#define FE_FAN_ON_C                 35.0f   /* yalnız termostatik modda */
+#define FE_FAN_OFF_C                30.0f
+#define FE_FAN_TACH_MIN_HZ          20.0f   /* 2 darbe/devir: 600 dev/dk (anma ≈ 1500 dev/dk = 50 Hz) */
+#define FE_FAN_START_MS           3000u     /* fan açıldıktan sonra takometre bekleme */
+#define FE_FAN_FAIL_MS            5000u     /* takometre bu süre düşük → W607 */
 #define FE_KV_RISE_MS                20u   /* tolerans kontrolü bu süreden sonra başlar */
 #define FE_TOL_VIOLATION_MS          50u   /* tolerans dışında kalma süresi -> hata */
 #define FE_INPUT_DEBOUNCE_MS         15u

@@ -15,6 +15,7 @@ void sim_init(sim_t *s)
     s->focus_delay_ms = 10u;
     s->filament_ready_after_ms = 3500u;   /* gerçek flaman 4 s'den kısa sürede hazır */
     s->rise_tau_ms = 1.0f;   /* yüksek frekanslı jeneratör: ~1 ms yükselme */
+    s->vref_gain = s->kv_div_gain = s->ma_div_gain = 1.0f;
 }
 
 static void gen_model(sim_t *s, const sm_outputs_t *o)
@@ -27,11 +28,12 @@ static void gen_model(sim_t *s, const sm_outputs_t *o)
     const bool line = ((o->xray_on && o->rl5_series) || s->xray_line_short) && !s->xray_line_open;
     const bool hv = line && o->gen_interlock;
     if (s->xray_line_short && hv && !(o->xray_on && o->rl5_series)) s->hv_from_short = true;
-    const float kv_target = hv ? o->kv_ref * (1.0f - s->kv_gain_error) : 0.0f;
-    const float ma_target = hv ? o->ma_ref : 0.0f;
+    const float kv_target = hv ? o->kv_ref * s->vref_gain * (1.0f - s->kv_gain_error) : 0.0f;
+    const float ma_target = hv ? o->ma_ref * s->vref_gain * (1.0f - s->ma_gain_error) : 0.0f;
     const float a = 1.0f / s->rise_tau_ms;
     s->kv += (kv_target - s->kv) * a;
     s->ma += (ma_target - s->ma) * a;
+    if (hv && s->kv >= 0.75f * o->kv_ref) { s->kv_true_acc += s->kv; s->ma_true_acc += s->ma; s->hv_true_ms++; }
 
     /* Fokus rölesi */
     if (!s->focus_stuck && o->focus_small != s->focus_fb) {
@@ -82,8 +84,9 @@ void sim_run(sim_t *s, exposure_sm_t *sm, uint32_t ms)
             .xray_line_fb = ((s->last_out.xray_on && s->last_out.rl5_series) || s->xray_line_short)
                             && !s->xray_line_open,
             .preheat_line_fb = s->last_out.preheat,
-            .kv_fb = s->kv,
-            .ma_fb = s->ma,
+            /* ölçüm zinciri: gerçek değer × bölücü kazancı / referans (oransal ADC) + ofset */
+            .kv_fb = s->kv * s->kv_div_gain / s->vref_gain + (s->kv > 0.5f ? s->kv_fb_offset : 0.0f),
+            .ma_fb = s->ma * s->ma_div_gain / s->vref_gain + (s->ma > 0.05f ? s->ma_fb_offset : 0.0f),
         };
         if (s->use_hs_adc) {
             hs_line_map(hs_line_classify(s->hs1_adc), &in.hs_stage1, &in.hs_stage1_nc);

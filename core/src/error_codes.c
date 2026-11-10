@@ -177,6 +177,12 @@ static const fe_error_t table[] = {
     { 605, 'W', SEV_WARNING, "Solunum taban basıncı aralık dışı",
       "Yastık / kemer taban basıncı ölçüm aralığının dışında (çok az ya da çok fazla şişirilmiş, hortum çıkmış).",
       "Yastığı / kemeri yeniden yerleştirip uygun basınca şişirin; hortum bağlantısını kontrol edin." },
+    { 606, 'W', SEV_WARNING, "Kumanda kutusu içi sıcak",
+      "Kumanda kutusunun iç sıcaklığı 55 °C'ye ulaştı (tasarım sınırı 50 °C). Ekran ve elektronik ömrü kısalır.",
+      "Havalandırma ızgaralarının açık olduğunu ve oda sıcaklığının 40 °C'yi aşmadığını kontrol edin. Çekim aralarını uzatın. Sürerse servisi arayın." },
+    { 607, 'W', SEV_WARNING, "Fan arızası",
+      "Kumanda kutusu fanı çalıştırıldığı halde dönmüyor ya da çok yavaş dönüyor.",
+      "Fanın önünde engel olmadığını kontrol edin ve servisi arayın. Fan değiştirilene kadar yoğun çekimden kaçının." },
 };
 
 #define N_ERR (sizeof(table) / sizeof(table[0]))
@@ -256,6 +262,8 @@ const fe_error_t *fe_error_by_code(uint16_t code) { return by_code(code); }
 
 const fe_error_t *fe_warning_no_calibration(void) { return by_code(602); }
 const fe_error_t *fe_warning_dap_meter(void) { return by_code(603); }
+const fe_error_t *fe_warning_box_temp(void) { return by_code(606); }
+const fe_error_t *fe_warning_fan(void) { return by_code(607); }
 
 const fe_error_t *fe_error_table(uint32_t *count)
 {
