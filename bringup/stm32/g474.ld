@@ -1,0 +1,4 @@
+/* STM32G474VET6: 512 KB flash, SRAM1+SRAM2 96 KB (CCM kullanılmaz) */
+MEMORY { FLASH (rx) : ORIGIN = 0x08000000, LENGTH = 512K
+         RAM (rwx)  : ORIGIN = 0x20000000, LENGTH = 96K }
+INCLUDE common.ld
