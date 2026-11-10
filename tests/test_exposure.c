@@ -141,6 +141,28 @@ TEST(filaman_hazir_olmazsa)
     CHECK(!s.last_out.ready_indicator, "hazir yanmamali");
 }
 
+TEST(sistem_hazir_sureyle)
+{
+    /* İnvertör hazırı kendi verir; kart sinyal okumaz: hazır yalnız süreyle */
+    sm_config_t cfg = { .hs_dual_channel = true, .pedal_dual_channel = true,
+                        .line_readback = true, .filament_ready_by_timer = true };
+    sm_init(&sm, &cfg);
+    sim_init(&s);
+    sim_run(&s, &sm, 10);
+    s.filament_broken = true;            /* sinyal hiç gelmiyor */
+    set_rad(70, 20, 100, FOCUS_LARGE);
+    s.hs1 = true;
+    sim_run(&s, &sm, FE_FILAMENT_WARMUP_MS - 100);
+    CHECK(sm.state == ST_PREP && !s.last_out.ready_indicator, "isinma bitmeden hazir yok");
+    sim_run(&s, &sm, 200);
+    CHECK(sm.state == ST_READY && s.last_out.ready_indicator, "sure dolunca hazir");
+    s.hs2 = true;
+    sim_run(&s, &sm, 300);
+    release_all();
+    sim_run(&s, &sm, 50);
+    CHECK(sm.last_record.reason == END_TIME_DONE && s.xray_on_ms >= 99 && s.xray_on_ms <= 101, "cekim tamam");
+}
+
 TEST(kv_tolerans_hatasi)
 {
     setup(false);
@@ -836,6 +858,7 @@ int main(void)
 {
     printf("Isinlama durum makinesi testleri\n");
     RUN(normal_radyografi);
+    RUN(sistem_hazir_sureyle);
     RUN(erken_ikinci_kademe);
     RUN(dogrudan_ikinci_kademe);
     RUN(isinlamada_birakma);

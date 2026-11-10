@@ -113,6 +113,11 @@ typedef struct {
     bool fluoro_enabled;           /* floroskopi opsiyonu bu cihazda açık (servis menüsü) */
     bool dap_meter_enabled;        /* DAP metre takılı (servis menüsü); kapalıysa DAP'ı FalconXray hesaplar */
     bool large_focus_off;          /* çift fokuslu insertte büyük fokus kullanılmıyor (servis menüsü) */
+    /* İnvertör "Sistem hazır"ı kendi içinde 1. kademeden 3 s sonra verir
+     * (Asım, 30.10.2026); kartın okuyacağı ayrı bir filaman akımı sinyali
+     * yoksa hazır yalnız süreyle (FE_FILAMENT_WARMUP_MS) belirlenir ve
+     * filament_ok girişi yok sayılır. Sinyal J2'den okunabiliyorsa false. */
+    bool filament_ready_by_timer;
     float gen_power_max_w;         /* 0 = varsayılan (FE_GEN_POWER_MAX_W) */
     bool pc_link_required;         /* PC kontrol modu: bağlantı zorunlu, koparsa ışınlama kesilir */
     bool pc_link_serial;           /* PC bağlantısı RS-232 (Current); false = TGP */
