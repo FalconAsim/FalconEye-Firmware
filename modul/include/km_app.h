@@ -24,7 +24,7 @@ typedef struct {
 void km_app_init(km_app_t *a, km_tx_fn tx, void *ctx, const km_version_t *ver);
 /* 1 kHz: EKG örneği (µV) ve elektrot kopukluk maskesi. Pencere mantığı ve pencere mesajı burada işler. */
 void km_app_ecg_sample(km_app_t *a, uint32_t t_ms, int32_t x_uv, uint8_t lead_mask);
-/* 50 Hz: etkin solunum kaynağından örnek (yastık: 10 Pa birimi; akış: Pa; empedans: mΩ) */
+/* 50 Hz: etkin solunum kaynağından örnek (yastık: Pa; akış: 0,1 Pa; empedans: mΩ). Durumdaki rbase eski birimde kalır. */
 void km_app_resp_sample(km_app_t *a, uint32_t t_ms, int32_t x);
 void km_app_set_rsrc(km_app_t *a, uint8_t rsrc);      /* sürücü: takılı / seçili solunum kaynağı */
 void km_app_set_hw_err(km_app_t *a, uint8_t err_bits); /* sürücü: KM_ERR_ADS / ABP / SDP */

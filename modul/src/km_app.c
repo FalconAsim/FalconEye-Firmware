@@ -1,8 +1,8 @@
 #include "km_app.h"
 #include <string.h>
 
-#define RBASE_MIN 20      /* yastık / kemer taban basıncı 0,2 kPa (10 Pa birimi) */
-#define RBASE_MAX 900     /* 9 kPa – sensör 0–10 kPa */
+#define RBASE_MIN 200     /* yastık / kemer taban basıncı 0,2 kPa (Pa) */
+#define RBASE_MAX 9000    /* 9 kPa – sensör 0–10 kPa */
 
 static void send(km_app_t *a, uint32_t id, const uint8_t *d, uint8_t n) { if (a->tx) (void)a->tx(a->ctx, id, d, n); }
 
@@ -13,15 +13,22 @@ void km_app_init(km_app_t *a, km_tx_fn tx, void *ctx, const km_version_t *ver)
     if (ver) a->ver = *ver;
     a->ver.proto = KM_PROTO_VERSION;
     km_ecg_init(&a->ecg, KM_SP_OTHER);
-    km_resp_init(&a->resp, KM_RSRC_NONE, false);
+    km_resp_init(&a->resp, KM_RSRC_NONE, false, KM_SP_OTHER);
     km_gate_init(&a->gate);
+}
+
+/* tür henüz gelmediyse (yapılandırma yok) KM_SP_OTHER – önceki tek ayar */
+static void resp_reinit(km_app_t *a)
+{
+    km_resp_init(&a->resp, a->rsrc, (a->gate.cfg.flags & KM_CFGF_RESP_INVERT) != 0u,
+                 a->gate.have_cfg ? a->gate.cfg.species : (uint8_t)KM_SP_OTHER);
 }
 
 void km_app_set_rsrc(km_app_t *a, uint8_t rsrc)
 {
     if (rsrc == a->rsrc) return;
     a->rsrc = rsrc;
-    km_resp_init(&a->resp, rsrc, (a->gate.cfg.flags & KM_CFGF_RESP_INVERT) != 0u);
+    resp_reinit(a);
     a->wresp_n = 0;
 }
 
@@ -47,7 +54,9 @@ void km_app_get_status(const km_app_t *a, km_status_t *s)
     s->rsrc = a->rsrc;
     s->hr_bpm = km_ecg_hr_bpm(&a->ecg);
     s->rr_x10 = km_resp_rate_x10(&a->resp);
+    /* kablodaki birim değişmedi (arayüz tanımı): yastık 10 Pa, akış Pa, empedans mΩ */
     int32_t b = a->resp.env_min / KM_RESP_Q;
+    if (a->rsrc == KM_RSRC_PILLOW || a->rsrc == KM_RSRC_FLOW) b /= 10;
     if (b > 32767) b = 32767;
     if (b < -32768) b = -32768;
     s->rbase = (int16_t)b;
@@ -145,7 +154,7 @@ void km_app_rx(km_app_t *a, uint32_t t, uint32_t id, const uint8_t *data, uint8_
         uint8_t old_sp = a->gate.cfg.species; uint8_t old_fl = a->gate.cfg.flags; bool had = a->gate.have_cfg;
         if (km_gate_set_cfg(&a->gate, &c, a->rsrc, &ack) == KM_CFG_OK) {
             if (!had || c.species != old_sp) km_ecg_init(&a->ecg, c.species);                 /* tür değişti: eşik yeniden öğrenilir */
-            if (!had || ((c.flags ^ old_fl) & KM_CFGF_RESP_INVERT)) km_resp_init(&a->resp, a->rsrc, (c.flags & KM_CFGF_RESP_INVERT) != 0u);
+            if (!had || c.species != old_sp || ((c.flags ^ old_fl) & KM_CFGF_RESP_INVERT)) resp_reinit(a);   /* tür de solunum ayarını belirler */
             tx_win(a, t, false);
         }
         send(a, KM_ID_CFG_ACK, d, km_pack_cfg_ack(&ack, d));
@@ -162,7 +171,7 @@ void km_app_rx(km_app_t *a, uint32_t t, uint32_t id, const uint8_t *data, uint8_
         if (!km_unpack_cmd(data, len, &m)) break;
         ack.cmd = m.cmd; ack.result = 0;
         switch (m.cmd) {
-        case KM_CMD_RESP_ZERO: km_resp_init(&a->resp, a->rsrc, (a->gate.cfg.flags & KM_CFGF_RESP_INVERT) != 0u); break;
+        case KM_CMD_RESP_ZERO: resp_reinit(a); break;
         case KM_CMD_RESP_SRC: if (m.arg <= KM_RSRC_IMP) km_app_set_rsrc(a, m.arg); else ack.result = 1; break;
         case KM_CMD_SELFTEST: ack.result = a->err_hw ? 2u : 0u; break;
         case KM_CMD_VERSION: send(a, KM_ID_VERSION, d, km_pack_version(&a->ver, d)); break;
