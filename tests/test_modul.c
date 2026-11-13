@@ -2,6 +2,7 @@
 #include "check.h"
 #include "km_app.h"
 #include <math.h>
+#include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
 
@@ -30,12 +31,12 @@ static int32_t ecg_uv(const ecg_gen_t *g, uint32_t t)
     return (int32_t)v;
 }
 
-/* solunum (yastık, 10 Pa birimi): 300 ms alma, 400 ms verme, kalan süre düzlük */
+/* solunum (yastık, Pa): 300 ms alma, 400 ms verme, kalan süre düzlük – taban 3 kPa, salınım 400 Pa */
 static int32_t resp_val(uint32_t t, uint32_t period)
 {
-    uint32_t ph = t % period; double v = 300.0;
-    if (ph < 300u) v += 40.0 * ph / 300.0; else if (ph < 700u) v += 40.0 * (1.0 - (ph - 300.0) / 400.0);
-    return (int32_t)v + noise(1) / 2;
+    uint32_t ph = t % period; double v = 3000.0;
+    if (ph < 300u) v += 400.0 * ph / 300.0; else if (ph < 700u) v += 400.0 * (1.0 - (ph - 300.0) / 400.0);
+    return (int32_t)v + noise(1) * 5;
 }
 static bool resp_in_pause(uint32_t t, uint32_t period) { uint32_t ph = t % period; return ph >= 700u; }
 
@@ -351,6 +352,60 @@ TEST(komutlar)
     CHECK(app.boot_req, "tetikleme kapaliyken gecilir");
 }
 
+/* ---------- solunum tür tablosu (km_resp doğrudan) ---------- */
+/* nefes: %35 alma (doğrusal), %40 verme, %25 düzlük; taban + genlik, ±gürültü */
+static int32_t nefes(uint32_t t, uint32_t per, int32_t base, int32_t amp, int32_t nz)
+{
+    uint32_t ph = t % per; double a = 0.35 * per, e = 0.75 * per, v;
+    if (ph < a) v = ph / a; else if (ph < e) v = 1.0 - (ph - a) / (e - a); else v = 0.0;
+    return base + (int32_t)(amp * v) + (nz ? noise(nz) : 0);
+}
+typedef struct { uint16_t rate_x10; int n_breath; bool exp_seen; } resp_sonuc_t;
+static resp_sonuc_t resp_kos(uint8_t sp, uint8_t rsrc, uint32_t per, int32_t base, int32_t amp, int32_t nz, uint32_t sure_ms)
+{
+    km_resp_t r; km_respevt_t ev; resp_sonuc_t s = { 0, 0, false };
+    km_resp_init(&r, rsrc, false, sp);
+    for (uint32_t t = 0; t < sure_ms; t += 20u) {
+        int32_t x = nefes(t, per, base, amp, nz);
+        if (rsrc == KM_RSRC_FLOW) x = nefes(t + 20u, per, base, amp, 0) - nefes(t, per, base, amp, 0) + (nz ? noise(nz) : 0);   /* akış = hacim türevi */
+        if (km_resp_sample(&r, t, x, &ev)) s.n_breath++;
+        if (t > sure_ms / 2u && km_resp_phase_ok(&r, KM_RPH_EXP)) s.exp_seen = true;
+    }
+    s.rate_x10 = km_resp_rate_x10(&r);
+    return s;
+}
+/* ±%8: 50 Hz örneklemede nefes süresi 20 ms adımlı – fare 400 ms'de tek nefes %5 oynar */
+static bool yakin(uint16_t v, uint16_t hedef) { return v * 100u >= hedef * 92u && v * 100u <= hedef * 108u; }
+
+TEST(solunum_tur_tablosu)
+{
+    /* fare 150/dk, yastık salınımı yalnız 30 Pa (eski 10 Pa birimiyle 3 basamak – çözülemezdi) */
+    resp_sonuc_t s = resp_kos(KM_SP_MOUSE, KM_RSRC_PILLOW, 400, 1500, 30, 2, 20000);
+    CHECK(yakin(s.rate_x10, 1500) && s.exp_seen, "fare 150/dk, 30 Pa yastik");
+    /* fare 250/dk (uyanık üst sınır) – eski 240 ms alt sınırın hemen üstü */
+    s = resp_kos(KM_SP_MOUSE, KM_RSRC_PILLOW, 240, 1500, 40, 1, 20000);
+    CHECK(yakin(s.rate_x10, 2500), "fare 250/dk");
+    /* sıçan 70/dk */
+    s = resp_kos(KM_SP_RAT, KM_RSRC_PILLOW, 857, 2000, 60, 2, 30000);
+    CHECK(yakin(s.rate_x10, 700) && s.exp_seen, "sican 70/dk");
+    /* köpek 6/dk – OTHER (≤ 10 s) bunu kaçırır, köpek satırı (≤ 12 s) yakalar */
+    s = resp_kos(KM_SP_DOG, KM_RSRC_PILLOW, 11000, 3000, 300, 3, 90000);
+    CHECK(yakin(s.rate_x10, 55) && s.exp_seen, "kopek 5,5/dk");
+    s = resp_kos(KM_SP_OTHER, KM_RSRC_PILLOW, 11000, 3000, 300, 3, 90000);
+    CHECK(s.rate_x10 == 0, "diger: 11 s nefes gecersiz (eski davranis)");
+    /* kedi 20/dk, akış (0,1 Pa) */
+    s = resp_kos(KM_SP_CAT, KM_RSRC_FLOW, 3000, 0, 2000, 3, 40000);
+    CHECK(yakin(s.rate_x10, 200), "kedi 20/dk akis");
+    /* fare tablosu yavaş nefesi (6/dk) kabul etmez – yanlış tür seçimi hız vermez, pencere açılmaz */
+    s = resp_kos(KM_SP_MOUSE, KM_RSRC_PILLOW, 10000, 1500, 30, 1, 60000);
+    CHECK(s.rate_x10 == 0, "fare: 6/dk gecersiz");
+    /* genlik eşiği: fare yastığında 3 Pa salınım gürültü sayılır */
+    s = resp_kos(KM_SP_MOUSE, KM_RSRC_PILLOW, 400, 1500, 3, 0, 20000);
+    CHECK(s.rate_x10 == 0, "fare: 3 Pa salinim gecersiz");
+    /* geçersiz tür kodu → OTHER satırı */
+    CHECK(km_resp_par(99) == km_resp_par(KM_SP_OTHER), "gecersiz tur -> diger");
+}
+
 int main(void)
 {
     RUN(protokol_gidis_donus);
@@ -369,5 +424,6 @@ int main(void)
     RUN(erken_atim_pencereyi_kapatir);
     RUN(dalga_akisi_ve_canlilik);
     RUN(komutlar);
+    RUN(solunum_tur_tablosu);
     return REPORT();
 }
