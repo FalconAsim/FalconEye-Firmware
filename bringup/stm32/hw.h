@@ -38,6 +38,7 @@ bool hw_gpio_read(char p, int pin);
 
 /* ---- UART (konsol) ---- */
 void hw_uart_init(USART_TypeDef *u, uint32_t baud);
+void hw_uart_init_ex(USART_TypeDef *u, uint32_t baud, bool swap);   /* swap: TX <-> RX uç değişimi */
 void hw_uart_putc(USART_TypeDef *u, char c);
 int  hw_uart_getc(USART_TypeDef *u);   /* yoksa −1 */
 void hw_uart_puts(USART_TypeDef *u, const char *s);
