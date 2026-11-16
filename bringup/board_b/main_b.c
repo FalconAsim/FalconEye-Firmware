@@ -10,6 +10,11 @@
 #include <string.h>
 
 #define CON USART2
+/* Yedek zamanlayıcı (U2 STM32G031) bağlantısı: USART1, AF7, 115200 8N1.
+ * Kart B rev 0.6b5 (Asım 15.11.2026, yol çizimi için uç değişimi): PC4 = RX (← U2 TX, net BT_TX),
+ * PC5 = TX (→ U2 RX, net BT_RX). USART1 varsayılanının tersi olduğu için CR2.SWAP = 1 ZORUNLU.
+ * SWAP unutulursa iki kart konuşamaz → yedek zamanlayıcı silahlanmaz → çekim olmaz (güvenli yön). */
+#define BT_UART USART1
 #define FW_TEXT "FalconEye Kart B devreye alma v0.1 (10.11.2026)"
 
 static bu_guard_t g_guard;
@@ -53,6 +58,8 @@ static void setup(void)
     g_hse = hw_clock_init();
     hw_gpio_af('D', 5, 7, false); hw_gpio_af('D', 6, 7, false);
     hw_uart_init(CON, 115200u); hw_printf_init(CON);
+    hw_gpio_af('C', 4, 7, false); hw_gpio_af('C', 5, 7, false);
+    hw_uart_init_ex(BT_UART, 115200u, true);          /* PC4 RX / PC5 TX – SWAP, yukarıdaki not */
     for (int i = 0; i < BU_B_NIN; i++) hw_gpio_in(BU_B_IN[i].pin.port, BU_B_IN[i].pin.pin, 0);
     hw_gpio_in('C', 10, 0);                           /* FAN_TACH (R82 10k yukarı) */
     static const struct { char p; int n; } an[] = { {'A', 0}, {'A', 1}, {'A', 2}, {'A', 3}, {'A', 4}, {'A', 5},

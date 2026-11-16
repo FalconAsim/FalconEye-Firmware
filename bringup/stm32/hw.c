@@ -107,15 +107,20 @@ void hw_gpio_write(char p, int pin, bool level) { hw_port(p)->BSRR = level ? (1u
 bool hw_gpio_read(char p, int pin) { return (hw_port(p)->IDR >> pin) & 1u; }
 
 /* ---------------- UART ---------------- */
-void hw_uart_init(USART_TypeDef *u, uint32_t baud)
+void hw_uart_init(USART_TypeDef *u, uint32_t baud) { hw_uart_init_ex(u, baud, false); }
+
+/* swap = true: TX ve RX uçları yer değiştirir (USART_CR2.SWAP; yalnız UE = 0 iken yazılabilir). */
+void hw_uart_init_ex(USART_TypeDef *u, uint32_t baud, bool swap)
 {
 #if HW_G4
-    if (u == USART2) RCC->APB1ENR1 |= RCC_APB1ENR1_USART2EN;
+    if (u == USART1) RCC->APB2ENR |= RCC_APB2ENR_USART1EN;
+    else if (u == USART2) RCC->APB1ENR1 |= RCC_APB1ENR1_USART2EN;
     else if (u == USART3) RCC->APB1ENR1 |= RCC_APB1ENR1_USART3EN;
 #else
     if (u == USART2) RCC->APBENR1 |= RCC_APBENR1_USART2EN;
 #endif
     u->CR1 = 0;
+    u->CR2 = swap ? USART_CR2_SWAP : 0u;
     u->BRR = (hw_sysclk + baud / 2u) / baud;
     u->CR1 = USART_CR1_TE | USART_CR1_RE | USART_CR1_UE;
 }
