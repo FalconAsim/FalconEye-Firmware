@@ -32,7 +32,7 @@ const bu_out_def_t BU_B_OUT[BU_B_NOUT] = {
 const bu_pin_t BU_B_OUT_PIN[BU_B_NOUT] = {
     {'E', 0}, {'E', 1}, {'E', 3}, {'C', 11}, {'E', 7}, {'E', 8}, {'F', 10},
     {'E', 4}, {'E', 5}, {'E', 6}, {'E', 9}, {'E', 10}, {'E', 11}, {'E', 12},
-    {'E', 13}, {'E', 14}, {'E', 15}, {'D', 10}, {'D', 11}, {'D', 12}, {'B', 3},
+    {'B', 12}, {'E', 14}, {'E', 15}, {'D', 10}, {'D', 11}, {'D', 12}, {'B', 3},   /* LAMBAISIN: PB12 (kart rev 0.7f) */
     {'D', 3},
 };
 const bu_pin_t BU_B_XRAY_REQ = {'E', 2};
