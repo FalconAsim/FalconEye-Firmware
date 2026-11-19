@@ -75,7 +75,7 @@ static void setup(void)
     hw_gpio_af('B', 13, 5, false); hw_gpio_af('B', 14, 5, false); hw_gpio_af('B', 15, 5, false);
     hw_spi_init(SPI2, 1);
     hw_delay_ms(2); hw_gpio_write('C', 7, true); hw_delay_ms(60);   /* W5500 reset bırak, PLL kilidi */
-    /* I2C1: FRAM U16 0x50, EEPROM U47 0x51, MAC U46 0x53 */
+    /* I2C1: FRAM U16 0x50, EEPROM U47 0x51, MAC U46 0x53, genişleme U52 TCA9535 0x20 */
     hw_gpio_af('A', 15, 4, true); hw_gpio_af('B', 7, 4, true);
     hw_i2c_init(I2C1);
     /* FDCAN1 → Kart A */
@@ -144,6 +144,37 @@ static void cmd_raylar(int *fails)
     verdict(g_hse, "HSE 8 MHz (Y1)", g_hse ? "calisiyor" : "baslamadi - HSI16 ile devam", fails);
 }
 
+/* U52 TCA9535 genişleme (J24, 16 giriş/çıkış): I2C1 0x20 (A0–A2 = GND). Kart B rev 0.6b3'ten beri takılı.
+ * EXP_INT (U52-1) yalnız J24-20'ye gider, MCU'ya bağlı değil → okuma sorgulamalı.
+ * Devreye almada uçlar giriş bırakılır (açılış varsayılanı); çıkış olarak sürülmez. */
+#define EXP_ADDR 0x20u
+
+static bool exp_read(uint16_t *v)
+{
+    uint8_t reg = 0x00, d[2] = { 0, 0 };                 /* giriş portu 0, ardından 1 (otomatik artış) */
+    if (!hw_i2c_write(I2C1, EXP_ADDR, &reg, 1, false) || !hw_i2c_read(I2C1, EXP_ADDR, d, 2)) return false;
+    *v = (uint16_t)(d[0] | (d[1] << 8));
+    return true;
+}
+
+static bool exp_config_inputs(void)
+{
+    uint8_t c[3] = { 0x06, 0xFF, 0xFF };                 /* yapılandırma 0/1 = hepsi giriş */
+    return hw_i2c_write(I2C1, EXP_ADDR, c, 3, true);
+}
+
+static void out_bits8(uint8_t v)
+{
+    for (int k = 7; k >= 0; k--) out((v >> k) & 1u ? "1" : "0");
+}
+
+static void exp_print(void)
+{
+    uint16_t v;
+    if (!exp_read(&v)) { outln("GENISLEME J24 (U52)  yanit yok"); return; }
+    out("GENISLEME J24 P0 7..0 "); out_bits8((uint8_t)v); out("  P1 7..0 "); out_bits8((uint8_t)(v >> 8)); outln("  (bos uc = 1)");
+}
+
 static void cmd_kimlik(int *fails)
 {
     char b[40];
@@ -163,6 +194,10 @@ static void cmd_kimlik(int *fails)
     for (int k = 0; k < 6; k++) { bu_fmt_hex(m + p, sizeof m - (size_t)p, mac[k], 2); p += 2; if (k < 5) m[p++] = ':'; }
     m[p] = 0;
     verdict(ok && (mac[0] | mac[1] | mac[2]), "MAC U46 (0x53)", ok ? m : "yanit yok", fails);
+    uint16_t ev = 0;
+    bool eok = hw_i2c_probe(I2C1, EXP_ADDR) && exp_config_inputs() && exp_read(&ev);
+    char e[8]; e[0] = 0; bu_fmt_hex(e, sizeof e, ev, 4);
+    verdict(eok, "TCA9535 U52 (0x20)", eok ? e : "yanit yok", fails);
 }
 
 static void measure_tach(void)
@@ -213,6 +248,7 @@ static void cmd_girisler(void)
         out(hn[k]); out(" "); out_f((float)c * vr / 4095.0f, 2); out(" V  "); outln(hs_line_text(hs_line_classify(c)));
     }
     out("KOL_LAMBA akim (LAMP_IS) ADC "); out_f((float)hw_adc_read_avg(ADC1, 8, 8) * vr / 4095.0f, 3); outln(" V");
+    exp_print();
 }
 
 static void cmd_cikis_liste(void)

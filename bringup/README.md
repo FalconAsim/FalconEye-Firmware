@@ -90,6 +90,7 @@ Her kart için aynı sırayı izleyin. Çıktıyı terminal kaydına alın; rapo
 | W25Q32 JEDEC | EF4016 |
 | FRAM 0x50, EEPROM 0x51 | I2C yanıt |
 | MAC 0x53 | okunur, OUI ≠ 0 |
+| TCA9535 U52 0x20 (J24 genişleme) | I2C yanıt; 16 uç giriş yapılır ve okunur (boş uç = 1, `girisler` komutunda da görünür) |
 | Fan takometre | 20–400 Hz, fan açıldıktan 3 s sonra (Akasa DFS802512M ≈ 2500 d/dk ≈ 83 Hz) |
 | El butonu 1. / 2. kademe | "bırakılmış" (buton takılı, basılmamış) |
 | Acil stop kanal 2 | kapalı (P7 ve buton takılı, buton çekili) |
