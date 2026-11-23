@@ -46,7 +46,7 @@ static void safe_outputs(void)
     hw_gpio_out('D', 13, false);                      /* WDI */
     hw_gpio_out('D', 4, false);                       /* CAN_STB: normal */
     hw_gpio_out('C', 7, false);                       /* W5500_RST (aşağıda bırakılır) */
-    hw_gpio_out('B', 12, true);                       /* W5500_CS */
+    hw_gpio_out('E', 13, true);                       /* W5500_CS (PE13, kart rev 0.7f) */
     hw_gpio_out('F', 2, true);                        /* FLASH_CS */
     hw_gpio_out('F', 9, true);                        /* EE_WP: korumalı */
 }
@@ -116,10 +116,10 @@ static void verdict(bool ok, const char *name, const char *detail, int *fails)
 
 static uint8_t w5500_read(uint16_t addr)
 {
-    hw_gpio_write('B', 12, false);
+    hw_gpio_write('E', 13, false);
     hw_spi_xfer(SPI2, (uint8_t)(addr >> 8)); hw_spi_xfer(SPI2, (uint8_t)addr); hw_spi_xfer(SPI2, 0x00);
     uint8_t v = hw_spi_xfer(SPI2, 0);
-    hw_gpio_write('B', 12, true);
+    hw_gpio_write('E', 13, true);
     return v;
 }
 
